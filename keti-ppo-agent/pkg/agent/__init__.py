@@ -67,4 +67,20 @@ class AllocationResponse:
     reason: str               # 결정 이유
 
 
-__all__ = ['AllocationRequest', 'AllocationResponse']
+@dataclass
+class Experience:
+    """
+    PPO 학습을 위한 경험 데이터
+
+    PPO는 on-policy 알고리즘이므로 현재 정책으로 수집한 데이터만 사용
+    """
+    state: np.ndarray         # 상태 s
+    action: np.ndarray        # 행동 a (정규화된 값 0-1)
+    reward: float             # 보상 r
+    next_state: np.ndarray    # 다음 상태 s'
+    done: bool                # 에피소드 종료 여부
+    log_prob: float           # π(a|s)의 로그 확률 (PPO 비율 계산용)
+    value: float              # V(s) - Critic의 가치 추정 (Advantage 계산용)
+
+
+__all__ = ['AllocationRequest', 'AllocationResponse', 'Experience']
