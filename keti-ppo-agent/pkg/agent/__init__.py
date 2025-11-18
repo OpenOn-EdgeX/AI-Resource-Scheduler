@@ -83,4 +83,62 @@ class Experience:
     value: float              # V(s) - Critic의 가치 추정 (Advantage 계산용)
 
 
+if TORCH_AVAILABLE:
+    class ActorNetwork(nn.Module):
+        """
+        Actor (Policy) Network - 정책 네트워크
+
+        입력: 상태 벡터 [요청코어, 요청메모리, GPU사용률, 메모리사용률, Pod수]
+        출력: 행동의 평균(mean)과 표준편차(std)
+
+        연속 행동 공간에서 Gaussian Policy 사용:
+        - π(a|s) = N(μ(s), σ)
+        - μ(s): 상태에 따라 변하는 평균 (네트워크 출력)
+        - σ: 학습 가능한 파라미터 (상태 무관)
+        """
+        def __init__(self, state_dim: int, action_dim: int, hidden_dim: int = 64):
+            super().__init__()
+            # 공유 레이어 (특징 추출)
+            self.shared = nn.Sequential(
+                nn.Linear(state_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ReLU()
+            )
+            # 평균 출력 레이어
+            self.mean = nn.Linear(hidden_dim, action_dim)
+            # 로그 표준편차 (학습 가능한 파라미터, 상태 무관)
+            # log_std를 학습하면 항상 양수인 std = exp(log_std) 보장
+            self.log_std = nn.Parameter(torch.zeros(action_dim))
+
+        def forward(self, state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+            """
+            순전파: 상태 → (평균, 표준편차)
+            """
+            x = self.shared(state)
+            mean = torch.sigmoid(self.mean(x))  # 0-1 범위로 정규화
+            std = torch.exp(self.log_std).expand_as(mean)
+            return mean, std
+
+        def get_distribution(self, state: torch.Tensor) -> Normal:
+            """
+            상태에서 행동 분포 반환
+            """
+            mean, std = self.forward(state)
+            return Normal(mean, std)
+
+        def evaluate_actions(self, states: torch.Tensor, actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+            """
+            주어진 상태-행동 쌍의 log_prob과 entropy 계산
+
+            PPO 학습에서 사용:
+            - log_prob: 정책 비율(ratio) 계산용
+            - entropy: 탐색 보너스용
+            """
+            dist = self.get_distribution(states)
+            log_prob = dist.log_prob(actions).sum(dim=-1)  # 각 행동 차원의 log_prob 합
+            entropy = dist.entropy().sum(dim=-1)  # 엔트로피도 합
+            return log_prob, entropy
+
+
 __all__ = ['AllocationRequest', 'AllocationResponse', 'Experience']
