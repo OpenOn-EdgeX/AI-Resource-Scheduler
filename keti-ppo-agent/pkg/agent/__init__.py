@@ -140,5 +140,28 @@ if TORCH_AVAILABLE:
             entropy = dist.entropy().sum(dim=-1)  # 엔트로피도 합
             return log_prob, entropy
 
+    class CriticNetwork(nn.Module):
+        """
+        Critic (Value) Network - 가치 네트워크
+
+        입력: 상태 벡터
+        출력: 상태 가치 V(s) - 스칼라 값
+
+        V(s) = E[R_t | s_t = s]
+        현재 상태에서 기대되는 미래 보상의 총합
+        """
+        def __init__(self, state_dim: int, hidden_dim: int = 64):
+            super().__init__()
+            self.network = nn.Sequential(
+                nn.Linear(state_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, 1)  # 스칼라 출력
+            )
+
+        def forward(self, state: torch.Tensor) -> torch.Tensor:
+            return self.network(state)
+
 
 __all__ = ['AllocationRequest', 'AllocationResponse', 'Experience']
