@@ -220,5 +220,34 @@ class PPOAgent:
 
         logger.info(f"PPOAgent initialized (torch={self.use_torch})")
 
+    def _load_model(self):
+        """저장된 모델 로드"""
+        if os.path.exists(MODEL_PATH):
+            try:
+                checkpoint = torch.load(MODEL_PATH, weights_only=True)
+                self.actor.load_state_dict(checkpoint['actor'])
+                self.critic.load_state_dict(checkpoint['critic'])
+                if 'training_stats' in checkpoint:
+                    self.training_stats = checkpoint['training_stats']
+                logger.info(f"Loaded model from {MODEL_PATH}")
+            except Exception as e:
+                logger.warning(f"Failed to load model: {e}")
+
+    def save_model(self):
+        """모델 저장"""
+        if not self.use_torch:
+            return
+
+        try:
+            os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+            torch.save({
+                'actor': self.actor.state_dict(),
+                'critic': self.critic.state_dict(),
+                'training_stats': self.training_stats,
+            }, MODEL_PATH)
+            logger.info(f"Saved model to {MODEL_PATH}")
+        except Exception as e:
+            logger.error(f"Failed to save model: {e}")
+
 
 __all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
