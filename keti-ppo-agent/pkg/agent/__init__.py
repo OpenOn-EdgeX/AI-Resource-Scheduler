@@ -164,4 +164,61 @@ if TORCH_AVAILABLE:
             return self.network(state)
 
 
-__all__ = ['AllocationRequest', 'AllocationResponse', 'Experience']
+class PPOAgent:
+    """
+    PPO Agent for GPU Resource Allocation
+
+    ============================================================================
+    PPO (Proximal Policy Optimization) 알고리즘 설명
+    ============================================================================
+
+    1. 목표: 정책 π를 개선하여 기대 보상 최대화
+       J(π) = E[Σ γ^t * r_t]
+
+    2. Policy Gradient의 문제점:
+       - 업데이트가 너무 크면 성능 붕괴 (catastrophic forgetting)
+       - 업데이트가 너무 작으면 학습 느림
+
+    3. PPO 해결책: Clipped Surrogate Objective
+       - 정책 변화량을 제한하여 안정적 학습
+       - ratio = π_new(a|s) / π_old(a|s)
+       - clip(ratio, 1-ε, 1+ε) 로 비율 제한
+
+    4. Advantage 함수 A(s,a):
+       - A(s,a) = Q(s,a) - V(s)
+       - "이 행동이 평균보다 얼마나 좋은가?"
+       - GAE로 계산: A_t = Σ (γλ)^l * δ_{t+l}
+         where δ_t = r_t + γV(s_{t+1}) - V(s_t)
+    """
+
+    def __init__(self):
+        self.use_torch = TORCH_AVAILABLE
+
+        if self.use_torch:
+            self.actor = ActorNetwork(STATE_DIM, ACTION_DIM)
+            self.critic = CriticNetwork(STATE_DIM)
+            self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=LEARNING_RATE)
+            self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=LEARNING_RATE)
+
+            # 저장된 모델 로드 시도
+            self._load_model()
+        else:
+            self.actor = None
+            self.critic = None
+
+        # 경험 버퍼 (학습용) - Experience 객체 리스트
+        self.experiences: List[Experience] = []
+
+        # 학습 통계
+        self.training_stats = {
+            'total_updates': 0,
+            'total_experiences': 0,
+            'avg_reward': 0.0,
+            'avg_actor_loss': 0.0,
+            'avg_critic_loss': 0.0,
+        }
+
+        logger.info(f"PPOAgent initialized (torch={self.use_torch})")
+
+
+__all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
