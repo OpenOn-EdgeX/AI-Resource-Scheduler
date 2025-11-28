@@ -249,5 +249,78 @@ class PPOAgent:
         except Exception as e:
             logger.error(f"Failed to save model: {e}")
 
+    def get_allocation(self, request: AllocationRequest) -> AllocationResponse:
+        """자원 할당 결정 (추론)"""
+        if self.use_torch:
+            return self._get_allocation_ppo(request)
+        else:
+            return self._get_allocation_heuristic(request)
+
+    def _get_allocation_ppo(self, request: AllocationRequest) -> AllocationResponse:
+        """
+        PPO 기반 할당 결정 (추론 모드)
+
+        학습 시에는 탐색을 위해 분포에서 샘플링하지만,
+        실제 서비스에서는 평균값(결정론적)을 사용
+        """
+        state = self._request_to_state(request)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+
+        logger.info("=" * 60)
+        logger.info("[PPO Inference] 할당 결정 시작")
+        logger.info(f"  [INPUT] requested_cores={request.requested_cores}%, "
+                    f"requested_memory={request.requested_memory}MB")
+        logger.info(f"  [INPUT] node_gpu_util={request.node_gpu_util:.2%}, "
+                    f"node_mem_util={request.node_mem_util:.2%}, "
+                    f"running_pods={request.running_pods}")
+        logger.info(f"  [STATE] vector={state.tolist()}")
+
+        with torch.no_grad():
+            mean, std = self.actor(state_tensor)
+            value = self.critic(state_tensor).item()
+            # 추론 시에는 결정론적으로 평균 사용
+            action = mean.squeeze().numpy()
+
+        logger.info(f"  [ACTOR] mean={mean.squeeze().tolist()}, std={std.squeeze().tolist()}")
+        logger.info(f"  [CRITIC] V(s)={value:.4f}")
+        logger.info(f"  [ACTION] raw(0-1)={action.tolist()}")
+
+        # 행동을 실제 값으로 변환 (0-1 → 실제 범위)
+        raw_cores = action[0] * (MAX_CORES_PERCENT - MIN_CORES_PERCENT) + MIN_CORES_PERCENT
+        raw_memory = action[1] * (MAX_MEMORY_MB - MIN_MEMORY_MB) + MIN_MEMORY_MB
+        cores_percent = int(raw_cores)
+        memory_mb = int(raw_memory)
+
+        logger.info(f"  [CONVERT] raw_cores={raw_cores:.1f}%, raw_memory={raw_memory:.0f}MB")
+
+        # 원본 요청 대비 조정 (요청보다 많이 할당하지 않음)
+        cores_before_cap = cores_percent
+        mem_before_cap = memory_mb
+        cores_percent = min(cores_percent, request.requested_cores)
+        memory_mb = min(memory_mb, request.requested_memory)
+
+        # 최소값 보장
+        cores_percent = max(cores_percent, MIN_CORES_PERCENT)
+        memory_mb = max(memory_mb, MIN_MEMORY_MB)
+
+        if cores_before_cap != cores_percent or mem_before_cap != memory_mb:
+            logger.info(f"  [CAP] cores: {cores_before_cap}% -> {cores_percent}% "
+                       f"(max={request.requested_cores}%), "
+                       f"memory: {mem_before_cap}MB -> {memory_mb}MB "
+                       f"(max={request.requested_memory}MB)")
+
+        confidence = float(1.0 / (1.0 + std.mean().item()))
+
+        logger.info(f"  [RESULT] allocated_cores={cores_percent}%, "
+                    f"allocated_memory={memory_mb}MB, confidence={confidence:.4f}")
+        logger.info("=" * 60)
+
+        return AllocationResponse(
+            allocated_cores=cores_percent,
+            allocated_memory=memory_mb,
+            confidence=confidence,
+            reason=f"PPO decision (gpu_util={request.node_gpu_util:.2f}, pods={request.running_pods})"
+        )
+
 
 __all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
