@@ -322,5 +322,35 @@ class PPOAgent:
             reason=f"PPO decision (gpu_util={request.node_gpu_util:.2f}, pods={request.running_pods})"
         )
 
+    def _get_allocation_heuristic(self, request: AllocationRequest) -> AllocationResponse:
+        """휴리스틱 기반 할당 결정 (PyTorch 없을 때)"""
+        gpu_factor = 1.0 - (request.node_gpu_util * 0.3)
+        mem_factor = 1.0 - (request.node_mem_util * 0.3)
+        pod_factor = max(0.5, 1.0 - (request.running_pods * 0.1))
+
+        cores_percent = int(request.requested_cores * gpu_factor * pod_factor)
+        memory_mb = int(request.requested_memory * mem_factor * pod_factor)
+
+        cores_percent = max(MIN_CORES_PERCENT, min(MAX_CORES_PERCENT, cores_percent))
+        memory_mb = max(MIN_MEMORY_MB, min(MAX_MEMORY_MB, memory_mb))
+
+        return AllocationResponse(
+            allocated_cores=cores_percent,
+            allocated_memory=memory_mb,
+            confidence=0.7,
+            reason=f"Heuristic (gpu_util={request.node_gpu_util:.2f}, factor={gpu_factor:.2f})"
+        )
+
+    def _request_to_state(self, request: AllocationRequest) -> np.ndarray:
+        """요청을 상태 벡터로 변환 (정규화)"""
+        """인풋값으로 requested_cores 는 요청한 sm값  """
+        return np.array([
+            request.requested_cores / 100.0,
+            request.requested_memory / MAX_MEMORY_MB,
+            request.node_gpu_util,
+            request.node_mem_util,
+            min(request.running_pods / 10.0, 1.0)
+        ], dtype=np.float32)
+
 
 __all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
