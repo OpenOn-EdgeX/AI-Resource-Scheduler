@@ -352,5 +352,75 @@ class PPOAgent:
             min(request.running_pods / 10.0, 1.0)
         ], dtype=np.float32)
 
+    # ========================================================================
+    # 경험 수집 (학습 데이터)
+    # ========================================================================
+
+    def select_action_for_training(self, request: AllocationRequest) -> Tuple[AllocationResponse, Experience]:
+        """
+        학습을 위한 행동 선택 (탐색 포함)
+
+        추론과 달리 분포에서 샘플링하여 탐색(exploration) 수행
+        log_prob과 value도 함께 반환하여 나중에 학습에 사용
+        """
+        if not self.use_torch:
+            response = self._get_allocation_heuristic(request)
+            return response, None
+
+        state = self._request_to_state(request)
+        state_tensor = torch.FloatTensor(state).unsqueeze(0)
+
+        with torch.no_grad():
+            # Actor에서 분포 얻기
+            dist = self.actor.get_distribution(state_tensor)
+
+            # 분포에서 샘플링 (탐색!)
+            action = dist.sample()
+
+            # log_prob 계산 (PPO ratio 계산에 필요)
+            log_prob = dist.log_prob(action).sum().item()
+
+            # Critic에서 V(s) 얻기 (Advantage 계산에 필요)
+            value = self.critic(state_tensor).item()
+
+            action = action.squeeze().numpy()
+
+        # 행동을 실제 값으로 변환
+        cores_percent = int(action[0] * (MAX_CORES_PERCENT - MIN_CORES_PERCENT) + MIN_CORES_PERCENT)
+        memory_mb = int(action[1] * (MAX_MEMORY_MB - MIN_MEMORY_MB) + MIN_MEMORY_MB)
+
+        cores_percent = min(max(cores_percent, MIN_CORES_PERCENT), request.requested_cores)
+        memory_mb = min(max(memory_mb, MIN_MEMORY_MB), request.requested_memory)
+
+        response = AllocationResponse(
+            allocated_cores=cores_percent,
+            allocated_memory=memory_mb,
+            confidence=0.5,  # 탐색 중이므로 신뢰도 낮음
+            reason="PPO training exploration"
+        )
+
+        # 부분 경험 생성 (reward와 next_state는 나중에 채움)
+        partial_exp = Experience(
+            state=state,
+            action=action,  # 정규화된 값 (0-1)
+            reward=0.0,     # 나중에 채움
+            next_state=state,  # 나중에 채움
+            done=False,
+            log_prob=log_prob,
+            value=value
+        )
+
+        return response, partial_exp
+
+    def record_experience(self, experience: Experience):
+        """
+        완성된 경험 기록
+
+        reward와 next_state가 채워진 후 호출
+        """
+        self.experiences.append(experience)
+        self.training_stats['total_experiences'] += 1
+        logger.debug(f"Recorded experience (total: {len(self.experiences)})")
+
 
 __all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
