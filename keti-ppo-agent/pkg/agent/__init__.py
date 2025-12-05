@@ -478,5 +478,168 @@ class PPOAgent:
 
         return advantages, returns
 
+    def train_step(self) -> Optional[Dict]:
+        """
+        PPO 학습 스텝
+
+        ========================================================================
+        PPO 알고리즘 상세
+        ========================================================================
+
+        1. 경험 버퍼에서 데이터 추출
+        2. GAE로 Advantage 계산
+        3. K epochs 동안 같은 데이터로 학습:
+
+           a) Policy Loss (Actor):
+              ratio = π_new(a|s) / π_old(a|s) = exp(log_prob_new - log_prob_old)
+
+              L_CLIP = min(ratio * A, clip(ratio, 1-ε, 1+ε) * A)
+
+              - A > 0 (좋은 행동): ratio 증가 시키고 싶지만 1+ε로 제한
+              - A < 0 (나쁜 행동): ratio 감소 시키고 싶지만 1-ε로 제한
+
+           b) Value Loss (Critic):
+              L_V = (V(s) - R_t)^2
+
+              R_t = A_t + V_old(s) (타겟)
+
+           c) Entropy Bonus:
+              L_E = -H(π) = -Σ π(a|s) log π(a|s)
+
+              엔트로피가 높으면 → 탐색 많이 함
+              보너스로 주면 → 탐색 장려
+
+           d) 총 Loss:
+              L = -L_CLIP + c1 * L_V - c2 * L_E
+
+        4. Gradient Clipping 적용
+        5. 모델 저장
+        """
+        if not self.use_torch:
+            return None
+        # 슈도코드상에서 T Time Steps가 Batch Size라는 뜻
+        if len(self.experiences) < BATCH_SIZE:
+            logger.debug(f"Not enough experiences: {len(self.experiences)} < {BATCH_SIZE}")
+            return None
+
+        logger.info(f"=== PPO Training Start (experiences: {len(self.experiences)}) ===")
+
+        # --------------------------------------------------------------------
+        # 1. 경험 데이터 추출
+        # --------------------------------------------------------------------
+        states = torch.tensor(np.array([e.state for e in self.experiences]), dtype=torch.float32)
+        actions = torch.tensor(np.array([e.action for e in self.experiences]), dtype=torch.float32)
+        rewards = [e.reward for e in self.experiences]
+        old_log_probs = torch.tensor([e.log_prob for e in self.experiences], dtype=torch.float32)
+        values = [e.value for e in self.experiences]
+        dones = [e.done for e in self.experiences]
+
+        # next_state의 V(s') 계산
+        next_states = torch.tensor(np.array([e.next_state for e in self.experiences]), dtype=torch.float32)
+        with torch.no_grad():
+            next_values = self.critic(next_states).squeeze().tolist()
+            if not isinstance(next_values, list):
+                next_values = [next_values]
+
+        # 평균 보상 로깅
+        avg_reward = sum(rewards) / len(rewards)
+        logger.info(f"  Average reward: {avg_reward:.4f}")
+
+        # --------------------------------------------------------------------
+        # 2. GAE로 Advantage 계산
+        # --------------------------------------------------------------------
+        advantages, returns = self._compute_gae(rewards, values, next_values, dones)
+
+        logger.info(f"  Advantages - mean: {advantages.mean():.4f}, std: {advantages.std():.4f}")
+
+        # --------------------------------------------------------------------
+        # 3. K Epochs 학습
+        # --------------------------------------------------------------------
+        total_actor_loss = 0.0
+        total_critic_loss = 0.0
+        total_entropy = 0.0
+
+        for epoch in range(K_EPOCHS):
+            # a) 새 정책에서 log_prob, entropy 계산
+            new_log_probs, entropy = self.actor.evaluate_actions(states, actions)
+
+            # b) Policy Ratio 계산
+            # ratio = π_new / π_old = exp(log π_new - log π_old)
+            ratio = torch.exp(new_log_probs - old_log_probs)
+
+            # c) Clipped Surrogate Objective
+            # L_CLIP = min(ratio * A, clip(ratio, 1-ε, 1+ε) * A)
+            surr1 = ratio * advantages                                    # ratio * A
+            surr2 = torch.clamp(ratio, 1 - CLIP_EPSILON, 1 + CLIP_EPSILON) * advantages  # clipped
+
+            # 최소값 취하고 음수로 (gradient ascent → descent)
+            actor_loss = -torch.min(surr1, surr2).mean()
+
+            # d) Entropy Bonus (탐색 장려)
+            entropy_loss = -entropy.mean()  # 음수로 해서 최대화
+
+            # e) Value Loss (MSE)
+            current_values = self.critic(states).squeeze()
+            critic_loss = nn.functional.mse_loss(current_values, returns)
+
+            # f) 총 Loss
+            loss = actor_loss + VALUE_LOSS_COEF * critic_loss + ENTROPY_COEF * entropy_loss
+
+            # g) Actor 업데이트
+            self.actor_optimizer.zero_grad()
+            self.critic_optimizer.zero_grad()
+            loss.backward()
+
+            # Gradient Clipping (폭발 방지)
+            nn.utils.clip_grad_norm_(self.actor.parameters(), MAX_GRAD_NORM)
+            nn.utils.clip_grad_norm_(self.critic.parameters(), MAX_GRAD_NORM)
+
+            self.actor_optimizer.step()
+            self.critic_optimizer.step()
+
+            total_actor_loss += actor_loss.item()
+            total_critic_loss += critic_loss.item()
+            total_entropy += entropy.mean().item()
+
+            # 클리핑 비율 모니터링
+            clipped = (ratio < 1 - CLIP_EPSILON) | (ratio > 1 + CLIP_EPSILON)
+            clip_fraction = clipped.float().mean().item()
+
+            logger.debug(f"  Epoch {epoch+1}/{K_EPOCHS}: "
+                        f"actor_loss={actor_loss.item():.4f}, "
+                        f"critic_loss={critic_loss.item():.4f}, "
+                        f"entropy={entropy.mean().item():.4f}, "
+                        f"clip_frac={clip_fraction:.2%}")
+
+        # --------------------------------------------------------------------
+        # 4. 통계 업데이트 및 저장
+        # --------------------------------------------------------------------
+        self.training_stats['total_updates'] += 1
+        self.training_stats['avg_reward'] = avg_reward
+        self.training_stats['avg_actor_loss'] = total_actor_loss / K_EPOCHS
+        self.training_stats['avg_critic_loss'] = total_critic_loss / K_EPOCHS
+
+        # 경험 버퍼 클리어 (on-policy이므로)
+        self.experiences = []
+
+        # 모델 저장
+        self.save_model()
+
+        result = {
+            'actor_loss': total_actor_loss / K_EPOCHS,
+            'critic_loss': total_critic_loss / K_EPOCHS,
+            'entropy': total_entropy / K_EPOCHS,
+            'avg_reward': avg_reward,
+            'updates': self.training_stats['total_updates'],
+        }
+
+        logger.info(f"=== PPO Training Complete ===")
+        logger.info(f"  Actor Loss: {result['actor_loss']:.4f}")
+        logger.info(f"  Critic Loss: {result['critic_loss']:.4f}")
+        logger.info(f"  Entropy: {result['entropy']:.4f}")
+        logger.info(f"  Total Updates: {result['updates']}")
+
+        return result
+
 
 __all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
