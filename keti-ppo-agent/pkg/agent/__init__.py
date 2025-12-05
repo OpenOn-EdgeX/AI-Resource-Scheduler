@@ -422,5 +422,61 @@ class PPOAgent:
         self.training_stats['total_experiences'] += 1
         logger.debug(f"Recorded experience (total: {len(self.experiences)})")
 
+    # ========================================================================
+    # PPO 학습 핵심 로직
+    # ========================================================================
+
+    def _compute_gae(self, rewards: List[float], values: List[float],
+                     next_values: List[float], dones: List[bool]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        GAE (Generalized Advantage Estimation) 계산
+
+        ========================================================================
+        GAE 수식:
+        ========================================================================
+
+        δ_t = r_t + γ * V(s_{t+1}) * (1 - done) - V(s_t)
+              ~~~   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~   ~~~~
+              보상   다음 상태의 할인된 가치            현재 가치
+
+        이것이 TD Error (Temporal Difference Error)
+        "예상보다 얼마나 좋았나/나빴나"
+
+        A_t = Σ_{l=0}^{∞} (γλ)^l * δ_{t+l}
+
+        - λ=0: A_t = δ_t (1-step TD, high bias, low variance)
+        - λ=1: A_t = Σ γ^l * r_{t+l} - V(s_t) (Monte Carlo, low bias, high variance)
+        - 0<λ<1: bias-variance tradeoff
+
+        Returns:
+            advantages: A_t 값들
+            returns: R_t = A_t + V(s_t) (Critic 학습 타겟)
+        """
+        advantages = []
+        gae = 0.0
+
+        # 역순으로 계산 (미래 → 과거)
+        for t in reversed(range(len(rewards))):
+            # TD Error: δ_t = r_t + γV(s') - V(s)
+            # done이면 다음 상태 가치 = 0
+            if dones[t]:
+                delta = rewards[t] - values[t]
+                gae = delta  # 에피소드 끝나면 GAE 리셋
+            else:
+                delta = rewards[t] + GAMMA * next_values[t] - values[t]
+                gae = delta + GAMMA * GAE_LAMBDA * gae
+
+            advantages.insert(0, gae)
+
+        advantages = torch.tensor(advantages, dtype=torch.float32)
+
+        # Returns = Advantages + Values (Critic 학습 타겟)
+        returns = advantages + torch.tensor(values, dtype=torch.float32)
+
+        # Advantage 정규화 (학습 안정성)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        return advantages, returns
+
 
 __all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
