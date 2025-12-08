@@ -641,5 +641,70 @@ class PPOAgent:
 
         return result
 
+    # ========================================================================
+    # Reward 함수 (GPU 자원 할당용)
+    # ========================================================================
 
-__all__ = ['PPOAgent', 'AllocationRequest', 'AllocationResponse', 'Experience']
+    @staticmethod
+    def compute_reward(allocated_cores: int, allocated_memory: int,
+                       actual_usage_pct: float, qos_met: bool,
+                       total_pods: int) -> float:
+        """
+        Reward 함수 - 할당 결정의 품질 평가
+
+        ========================================================================
+        Reward 설계 원칙:
+        ========================================================================
+
+        1. 자원 효율성 (Efficiency):
+           - 할당한 만큼 실제로 사용하면 좋음
+           - waste = allocated - actual_usage
+           - efficiency_reward = -waste (낭비 페널티)
+
+        2. QoS 만족도 (Quality of Service):
+           - 워크로드가 필요한 성능 달성했는지
+           - qos_reward = +1 if satisfied, -1 otherwise
+
+        3. 공정성 (Fairness):
+           - 여러 Pod이 있을 때 자원 독점 방지
+           - fairness_penalty = -α if allocated > fair_share
+
+        Args:
+            allocated_cores: 할당한 GPU 코어 %
+            allocated_memory: 할당한 메모리 MB
+            actual_usage_pct: 실제 GPU 사용률 (0-100)
+            qos_met: QoS 조건 만족 여부
+            total_pods: 전체 GPU Pod 수
+
+        Returns:
+            reward: 스칼라 보상 값
+        """
+        reward = 0.0
+
+        # 1. 효율성 보상: 할당 대비 사용률
+        # 이상적: actual_usage ≈ allocated
+        if allocated_cores > 0:
+            efficiency = actual_usage_pct / allocated_cores
+            efficiency = min(efficiency, 1.0)  # 최대 1.0
+            reward += efficiency * 0.5  # 가중치 0.5
+
+        # 2. QoS 보상
+        if qos_met:
+            reward += 1.0
+        else:
+            reward -= 0.5  # QoS 미충족 페널티
+
+        # 3. 공정성: Pod당 공평한 할당 기준
+        if total_pods > 1:
+            fair_share = 100.0 / total_pods
+            if allocated_cores > fair_share * 1.5:  # 공평 할당의 1.5배 초과시
+                reward -= 0.3  # 독점 페널티
+
+        # 4. 과소 할당 페널티 (너무 적게 주면)
+        if allocated_cores < 10:
+            reward -= 0.2
+
+        return reward
+
+
+__all__ = ["PPOAgent", "AllocationRequest", "AllocationResponse", "Experience"]
