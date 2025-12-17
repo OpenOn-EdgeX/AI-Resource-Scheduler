@@ -103,5 +103,87 @@ class PPOAgentAPI:
         self.app.add_url_rule('/status', 'status', self.status, methods=['GET'])
         self.app.add_url_rule('/feedback', 'feedback', self.feedback, methods=['POST'])
 
+    def partition(self):
+        """
+        파티션 이름(A, B, C)을 MPS 파티션 ID로 변환
+
+        Request body:
+        {
+            "partition_name": "A"
+        }
+
+        Response:
+        {
+            "partition_name": "A",
+            "partition_id": "GPU-895722c8-.../Dw8PDw8PDwAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        }
+        """
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "Empty request body"}), 400
+
+            partition_name = data.get('partition_name', '').upper()
+
+            if not partition_name:
+                return jsonify({"error": "Missing partition_name"}), 400
+
+            # 매핑이 비어있으면 다시 로드 시도
+            if not self._partition_map:
+                self._load_partitions()
+
+            partition_id = self._partition_map.get(partition_name)
+
+            if partition_id:
+                logger.info(f"Partition lookup: {partition_name} -> {partition_id}")
+                return jsonify({
+                    "partition_name": partition_name,
+                    "partition_id": partition_id
+                })
+            else:
+                logger.warning(f"Partition '{partition_name}' not found. Available: {list(self._partition_map.keys())}")
+                return jsonify({
+                    "error": f"Partition '{partition_name}' not found",
+                    "available": list(self._partition_map.keys())
+                }), 404
+
+        except Exception as e:
+            logger.error(f"Error processing partition request: {e}")
+            return jsonify({"error": str(e)}), 500
+
+    def list_partitions(self):
+        """
+        현재 노드의 MPS 파티션 목록 반환
+
+        Response:
+        {
+            "partitions": {"A": "GPU-.../xxx", "B": "GPU-.../yyy", "C": "GPU-.../zzz"},
+            "count": 3
+        }
+        """
+        # 매핑이 비어있으면 다시 로드
+        if not self._partition_map:
+            self._load_partitions()
+
+        return jsonify({
+            "partitions": self._partition_map,
+            "count": len(self._partition_map),
+            "node": NODE_NAME
+        })
+
+    def health(self):
+        """Health check endpoint"""
+        return jsonify({"status": "healthy", "node": NODE_NAME})
+
+    def status(self):
+        """Status endpoint"""
+        return jsonify({
+            "status": "running",
+            "node": NODE_NAME,
+            "config": get_config_summary(),
+            "request_count": self._request_count,
+            "gpu_status": self._get_gpu_status()
+        })
+
 
 __all__ = ['PPOAgentAPI']
