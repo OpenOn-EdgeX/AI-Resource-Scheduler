@@ -185,5 +185,91 @@ class PPOAgentAPI:
             "gpu_status": self._get_gpu_status()
         })
 
+    def allocate(self):
+        """
+        자원 할당 요청 처리
+
+        Request body:
+        {
+            "requested_cores": 80,      # 요청 GPU 코어 %
+            "requested_memory": 4000,   # 요청 메모리 MB
+            "pod_name": "workload-a",   # Pod 이름 (선택)
+            "namespace": "default"      # Namespace (선택)
+        }
+
+        Response:
+        {
+            "allocated_cores": 60,
+            "allocated_memory": 3000,
+            "confidence": 0.85,
+            "reason": "PPO decision ..."
+        }
+        """
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "Empty request body"}), 400
+
+            # 필수 필드 확인
+            requested_cores = data.get('requested_cores')
+            requested_memory = data.get('requested_memory')
+
+            if requested_cores is None or requested_memory is None:
+                return jsonify({
+                    "error": "Missing required fields: requested_cores, requested_memory"
+                }), 400
+
+            # 요청 메타데이터
+            pod_name = data.get('pod_name', 'unknown')
+            namespace = data.get('namespace', 'default')
+
+            logger.info("=" * 60)
+            logger.info(f"[API] /allocate 요청 수신 (#{self._request_count + 1})")
+            logger.info(f"  [REQ] pod={namespace}/{pod_name}, "
+                       f"cores={requested_cores}%, memory={requested_memory}MB")
+
+            # 노드 상태 조회
+            gpu_util, mem_util = self._get_node_utilization()
+            running_pods = self._get_running_gpu_pods()
+
+            logger.info(f"  [NODE] gpu_util={gpu_util:.2%}, mem_util={mem_util:.2%}, "
+                       f"running_pods={running_pods}")
+
+            # 할당 요청 생성
+            alloc_request = AllocationRequest(
+                requested_cores=int(requested_cores),
+                requested_memory=int(requested_memory),
+                node_gpu_util=gpu_util,
+                node_mem_util=mem_util,
+                running_pods=running_pods
+            )
+
+            # PPO Agent에게 할당 결정 요청
+            response = self.agent.get_allocation(alloc_request)
+
+            self._request_count += 1
+
+            logger.info(f"  [DECISION] {requested_cores}%/{requested_memory}MB -> "
+                       f"{response.allocated_cores}%/{response.allocated_memory}MB "
+                       f"(confidence={response.confidence:.2f})")
+            logger.info(f"  [REASON] {response.reason}")
+            logger.info("=" * 60)
+
+            return jsonify({
+                "allocated_cores": response.allocated_cores,
+                "allocated_memory": response.allocated_memory,
+                "confidence": response.confidence,
+                "reason": response.reason,
+                "node_status": {
+                    "gpu_util": gpu_util,
+                    "mem_util": mem_util,
+                    "running_pods": running_pods
+                }
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing allocation request: {e}")
+            return jsonify({"error": str(e)}), 500
+
 
 __all__ = ['PPOAgentAPI']
