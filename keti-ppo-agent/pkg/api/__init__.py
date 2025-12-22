@@ -271,5 +271,32 @@ class PPOAgentAPI:
             logger.error(f"Error processing allocation request: {e}")
             return jsonify({"error": str(e)}), 500
 
+    def feedback(self):
+        """
+        학습 피드백 수신 (나중에 reward 계산용)
+
+        Request body:
+        {
+            "pod_name": "workload-a",
+            "allocated_cores": 60,
+            "allocated_memory": 3000,
+            "actual_performance": 0.85,  # 실제 성능 (0-1)
+            "completed": true
+        }
+        """
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"error": "Empty request body"}), 400
+
+            # TODO: 피드백을 reward로 변환하여 학습에 사용
+            logger.info(f"Received feedback: {data}")
+
+            return jsonify({"status": "recorded"})
+
+        except Exception as e:
+            logger.error(f"Error processing feedback: {e}")
+            return jsonify({"error": str(e)}), 500
+
 
 __all__ = ['PPOAgentAPI']
