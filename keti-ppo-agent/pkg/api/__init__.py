@@ -298,5 +298,68 @@ class PPOAgentAPI:
             logger.error(f"Error processing feedback: {e}")
             return jsonify({"error": str(e)}), 500
 
+    def _get_node_utilization(self) -> tuple:
+        """노드 GPU/메모리 사용률 조회"""
+        try:
+            # nvidia-smi로 GPU 사용률 조회
+            result = subprocess.run(
+                ['nvidia-smi', '--query-gpu=utilization.gpu,utilization.memory',
+                 '--format=csv,noheader,nounits'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                if lines:
+                    # 첫 번째 GPU 기준
+                    parts = lines[0].split(',')
+                    gpu_util = float(parts[0].strip()) / 100.0
+                    mem_util = float(parts[1].strip()) / 100.0
+                    return gpu_util, mem_util
+        except Exception as e:
+            logger.warning(f"Failed to get GPU utilization: {e}")
+
+        # 기본값 반환
+        return 0.0, 0.0
+
+    def _get_running_gpu_pods(self) -> int:
+        """현재 노드에서 실행 중인 GPU Pod 수"""
+        # TODO: kubelet API 또는 다른 방법으로 조회
+        # 지금은 간단히 nvidia-smi pmon 사용
+        try:
+            result = subprocess.run(
+                ['nvidia-smi', 'pmon', '-c', '1'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                # 프로세스 수 계산 (헤더 제외)
+                lines = [l for l in result.stdout.strip().split('\n')
+                        if l and not l.startswith('#')]
+                return len(lines)
+        except Exception as e:
+            logger.warning(f"Failed to get running pods: {e}")
+
+        return 0
+
+    def _get_gpu_status(self) -> dict:
+        """GPU 상태 조회"""
+        try:
+            result = subprocess.run(
+                ['nvidia-smi', '--query-gpu=name,memory.total,memory.used,utilization.gpu',
+                 '--format=csv,noheader'],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                parts = result.stdout.strip().split(',')
+                return {
+                    "name": parts[0].strip() if len(parts) > 0 else "unknown",
+                    "memory_total": parts[1].strip() if len(parts) > 1 else "unknown",
+                    "memory_used": parts[2].strip() if len(parts) > 2 else "unknown",
+                    "utilization": parts[3].strip() if len(parts) > 3 else "unknown"
+                }
+        except Exception as e:
+            logger.warning(f"Failed to get GPU status: {e}")
+
+        return {"error": "nvidia-smi not available"}
+
 
 __all__ = ['PPOAgentAPI']
