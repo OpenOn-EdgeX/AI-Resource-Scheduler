@@ -361,5 +361,12 @@ class PPOAgentAPI:
 
         return {"error": "nvidia-smi not available"}
 
+    def run(self, host: str = None, port: int = None):
+        """Run the API server"""
+        host = host or API_HOST
+        port = port or API_PORT
+        logger.info(f"Starting PPO Agent API on {host}:{port}")
+        self.app.run(host=host, port=port, threaded=True)
 
-__all__ = ['PPOAgentAPI']
+
+__all__ = ["PPOAgentAPI"]
