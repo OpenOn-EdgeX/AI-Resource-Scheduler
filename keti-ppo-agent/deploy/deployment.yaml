@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: keti-ppo-agent
+  namespace: edge-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: keti-ppo-agent
+  namespace: edge-system
+  labels:
+    app: keti-ppo-agent
+spec:
+  selector:
+    matchLabels:
+      app: keti-ppo-agent
+  template:
+    metadata:
+      labels:
+        app: keti-ppo-agent
+    spec:
+      serviceAccountName: keti-ppo-agent
+      # Edge 노드에서만 실행
+      nodeSelector:
+        node-role.kubernetes.io/edge: ""
+      # HostNetwork로 노드 IP:8080 직접 접근
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: ppo-agent
+          image: ketidevit2/keti-ppo-agent:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              hostPort: 8080
+              name: http
+          env:
+            - name: NODE_NAME
