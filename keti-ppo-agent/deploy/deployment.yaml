@@ -38,3 +38,28 @@ spec:
               name: http
           env:
             - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: API_PORT
+              value: "8080"
+            - name: LOG_LEVEL
+              value: "INFO"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+            - name: nvidia-bin
+              mountPath: /usr/bin/nvidia-smi
+              readOnly: true
+          livenessProbe:
