@@ -63,3 +63,21 @@ spec:
               mountPath: /usr/bin/nvidia-smi
               readOnly: true
           livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: models
+          emptyDir: {}
+        - name: nvidia-bin
+          hostPath:
+            path: /usr/bin/nvidia-smi
+            type: File
