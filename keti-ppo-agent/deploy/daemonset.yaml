@@ -54,3 +54,25 @@ spec:
               value: "8080"
             - name: LOG_LEVEL
               value: "INFO"
+            - name: CUDA_MPS_PIPE_DIRECTORY
+              value: "/tmp/nvidia-mps"
+            - name: GPU_UUID
+              value: "GPU-895722c8-b706-27ae-018d-c43e405e6c35"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+            - name: mps-pipe
+              mountPath: /tmp/nvidia-mps
+            - name: nvidia-bin
+              mountPath: /usr/bin/nvidia-smi
+              readOnly: true
+            - name: nvidia-mps-control
+              mountPath: /usr/bin/nvidia-cuda-mps-control
+              readOnly: true
