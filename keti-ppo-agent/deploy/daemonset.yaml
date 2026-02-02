@@ -76,3 +76,49 @@ spec:
             - name: nvidia-mps-control
               mountPath: /usr/bin/nvidia-cuda-mps-control
               readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: models
+          hostPath:
+            path: /var/lib/keti/ppo-models
+            type: DirectoryOrCreate
+        - name: mps-pipe
+          hostPath:
+            path: /tmp/nvidia-mps
+            type: DirectoryOrCreate
+        - name: nvidia-bin
+          hostPath:
+            path: /usr/bin/nvidia-smi
+            type: File
+        - name: nvidia-mps-control
+          hostPath:
+            path: /usr/bin/nvidia-cuda-mps-control
+            type: File
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keti-ppo-agent
+  namespace: edge-system
+  labels:
+    app: keti-ppo-agent
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: keti-ppo-agent
