@@ -40,3 +40,7 @@ kubectl apply -f deploy/
 | `API_PORT` | 8080 | Agent API port |
 | `CUDA_MPS_PIPE_DIRECTORY` | - | MPS pipe path |
 | `GPU_UUID` | - | Target GPU UUID |
+
+## License
+
+See [LICENSE](LICENSE) for details.
