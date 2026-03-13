@@ -24,3 +24,11 @@ cd keti-ppo-agent
 docker build -t keti-ppo-agent .
 kubectl apply -f deploy/
 ```
+
+## API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/allocate` | POST | Request GPU SM allocation |
+| `/partition` | GET | Get current partition info |
+| `/health` | GET | Health check |
