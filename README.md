@@ -52,3 +52,7 @@ See [LICENSE](LICENSE) for details.
 | corehun | Project Lead |
 | DrakwonJ | Developer |
 | joingi99 | Developer |
+| KilJuHyun | Developer |
+| Kim-HanGyeol | Developer |
+| Nick-Stokes | Developer |
+| Sim-suyeon | Developer |
