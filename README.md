@@ -17,3 +17,10 @@ AI-Resource-Scheduler/
     ├── Dockerfile
     └── requirements.txt
 ```
+
+## Quick Start
+```bash
+cd keti-ppo-agent
+docker build -t keti-ppo-agent .
+kubectl apply -f deploy/
+```
