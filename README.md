@@ -32,3 +32,11 @@ kubectl apply -f deploy/
 | `/allocate` | POST | Request GPU SM allocation |
 | `/partition` | GET | Get current partition info |
 | `/health` | GET | Health check |
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_PORT` | 8080 | Agent API port |
+| `CUDA_MPS_PIPE_DIRECTORY` | - | MPS pipe path |
+| `GPU_UUID` | - | Target GPU UUID |
