@@ -44,3 +44,11 @@ kubectl apply -f deploy/
 ## License
 
 See [LICENSE](LICENSE) for details.
+
+## Contributors
+
+| Name | Role |
+|------|------|
+| corehun | Project Lead |
+| DrakwonJ | Developer |
+| joingi99 | Developer |
