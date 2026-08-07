@@ -1,0 +1,102 @@
+// C-RP-01 ~ C-RP-03 — 지능형 스케줄러 ↔ Resource Pool Manager (레이어 내부 gRPC)
+// 기능정의서 4.1.1~4.1.3 인터페이스 상세의 메시지 정의를 그대로 구현.
+// KETRIS 연동은 본 서비스에 포함하지 않는다 — SliceAllocation CR(spec/status) 경로로 분리.
+syntax = "proto3";
+
+package keti.rpm.v1;
+
+service ResourcePool {
+  // C-RP-01 선택 파티션 가용 자원·점유 상태 조회
+  rpc GetAvailableResourceStatus(GetAvailableResourceStatusRequest)
+      returns (AvailableResourceStatus);
+  // C-RP-02 모델 실행 이력 조회
+  rpc GetModelExecutionHistory(GetModelExecutionHistoryRequest)
+      returns (ModelExecutionHistory);
+  // C-RP-03 스케줄링 결과 등록·갱신 (RESERVED / RELEASED)
+  rpc UpdateAllocationDecision(UpdateAllocationDecisionRequest)
+      returns (UpdateAllocationDecisionResult);
+  // 실행 결과 저장 (모델 실행 이력 upsert — F-RP-06)
+  rpc UpsertModelExecutionHistory(UpsertModelExecutionHistoryRequest)
+      returns (ModelExecutionHistory);
+}
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  FREE = 1;
+  OVERCOMMIT = 2;
+}
+
+enum AllocationState {
+  ALLOCATION_STATE_UNSPECIFIED = 0;
+  RESERVED = 1;
+  RELEASED = 2;
+}
+
+enum ResourceBoundType {
+  RESOURCE_BOUND_TYPE_UNSPECIFIED = 0;
+  COMPUTE_BOUND = 1;
+  MEMORY_BOUND = 2;
+  MIXED = 3;
+}
+
+message GetAvailableResourceStatusRequest {
+  string device_id = 1;                  // 디바이스 식별자
+  string partition_id = 2;               // 파티션 ID
+}
+
+message AvailableResourceStatus {
+  double free_lsu = 1;                   // 가용 논리 자원량 (LSU, 논리값)
+  double overcommit_ratio = 2;           // 할당 약속량 / 물리 자원량
+  int32 active_tenants = 3;              // 활성 워크로드 수
+  Mode mode = 4;                         // FREE / OVERCOMMIT
+  double gpu_util = 5;                   // GPU 활용률 (실측 참고값)
+  double device_lsu_capacity = 6;        // 디바이스 총 LSU
+  int32 physical_sm_total = 7;           // 물리 SM 수
+}
+
+message GetModelExecutionHistoryRequest {
+  string model_id = 1;                   // 조회 키
+}
+
+message ModelExecutionHistory {
+  string model_id = 1;
+  int32 kernels_per_iter = 2;
+  ResourceBoundType resource_bound_type = 3;
+  double avg_gpu_util = 4;               // 누적 이동평균
+  int32 run_count = 5;
+  bool found = 6;                        // false = 이력 없음 → 스케줄러 lsu_est 폴백
+  double mps_pct = 7;
+  Mode mode = 8;
+  double avg_throughput = 9;
+}
+
+message UpdateAllocationDecisionRequest {
+  string workload_id = 1;                // AIWorkload metadata.uid (데모: pod_name)
+  string device_id = 2;
+  string partition_id = 3;
+  double lsu_amount = 4;                 // 할당 논리 자원량 (LSU)
+  AllocationState allocation_state = 5;  // RESERVED / RELEASED
+  string model_id = 6;
+  string pod_name = 7;
+}
+
+message UpdateAllocationDecisionResult {
+  bool success = 1;
+  int32 result_code = 2;                 // 0 정상 / 1 대상 없음 / 2 잘못된 요청
+  int32 virtual_sm = 3;                  // LSU→SM 환산값 (집계용)
+  double mps_pct = 4;
+  Mode mode = 5;
+  double free_lsu = 6;                   // 반영 후 가용량
+  int32 active_tenants = 7;
+  double overcommit_ratio = 8;
+}
+
+message UpsertModelExecutionHistoryRequest {
+  string model_id = 1;
+  double gpu_util = 2;
+  double throughput = 3;
+  ResourceBoundType resource_bound_type = 4;
+  int32 kernels_per_iter = 5;
+  double mps_pct = 6;
+  Mode mode = 7;
+}

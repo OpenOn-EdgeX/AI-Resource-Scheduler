@@ -9,7 +9,7 @@ Actor-Critic based reinforcement learning agent that optimizes GPU SM partition 
 ## Directory Structure
 ```
 AI-Resource-Scheduler/
-└── keti-ppo-agent/
+└── ppo-agent/
     ├── cmd/          # Entry point
     ├── pkg/          # Core packages (agent, api)
     ├── deploy/       # Kubernetes deployments
@@ -20,8 +20,8 @@ AI-Resource-Scheduler/
 
 ## Quick Start
 ```bash
-cd keti-ppo-agent
-docker build -t keti-ppo-agent .
+cd ppo-agent
+docker build -t ppo-agent .
 kubectl apply -f deploy/
 ```
 

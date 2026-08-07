@@ -1,0 +1,84 @@
+# KETI Resource Pool Manager — GPU 엣지 노드 배포용
+#
+# 대상 노드 taint 현황(점검 실측)과 대응:
+#   broken=true:NoSchedule            → toleration ①
+#   dedicated=kubeedge:NoSchedule     → toleration ②
+#   node.cilium.io/agent-not-ready    → toleration ③
+# cilium-envoy 가 Unknown 상태이므로 hostNetwork:true 로 CNI(파드 네트워크) 의존 제거.
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: resource-pool-manager
+  namespace: edge-system
+  labels:
+    app: resource-pool-manager
+spec:
+  selector:
+    matchLabels:
+      app: resource-pool-manager
+  template:
+    metadata:
+      labels:
+        app: resource-pool-manager
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        node-role.kubernetes.io/edge: ""
+      tolerations:
+        - key: "broken"                            # ① 노드 격리 taint
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "dedicated"                         # ② kubeedge 전용 taint
+          operator: "Equal"
+          value: "kubeedge"
+          effect: "NoSchedule"
+        - key: "node.cilium.io/agent-not-ready"    # ③ CNI 미준비 taint
+          operator: "Exists"
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: pool-manager
+          image: ketidevit2/resource-pool-manager:latest   # TODO: 이미지 빌드/푸시 후
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8082
+              name: http
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POOL_API_PORT
+              value: "8082"
+            - name: DEVICE_LSU_CAPACITY
+              value: "174"                # Blackwell 실측 (2026-07-15)
+            - name: COLLECT_INTERVAL_S
+              value: "5"
+            - name: POOL_DATA_DIR
+              value: "/var/lib/keti/pool-manager"
+          volumeMounts:
+            - name: data                  # 이력 SQLite 영구 저장 (emptyDir 금지)
+              mountPath: /var/lib/keti/pool-manager
+            - name: nvidia-bin
+              mountPath: /usr/bin/nvidia-smi
+              readOnly: true
+          livenessProbe:
+            httpGet: { path: /health, port: 8082 }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "50m", memory: "128Mi" }
+            limits:   { cpu: "300m", memory: "256Mi" }
+      volumes:
+        - name: data
+          hostPath:
+            path: /var/lib/keti/pool-manager
+            type: DirectoryOrCreate
+        - name: nvidia-bin
+          hostPath:
+            path: /usr/bin/nvidia-smi
+            type: File

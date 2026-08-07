@@ -1,0 +1,124 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ppo-agent
+  namespace: edge-system
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ppo-agent
+  namespace: edge-system
+  labels:
+    app: ppo-agent
+spec:
+  selector:
+    matchLabels:
+      app: ppo-agent
+  template:
+    metadata:
+      labels:
+        app: ppo-agent
+    spec:
+      serviceAccountName: ppo-agent
+      # Edge 노드에만 배포
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      nodeSelector:
+        node-role.kubernetes.io/edge: ""
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "node-role.kubernetes.io/edge"
+          operator: "Exists"
+          effect: "NoSchedule"
+      containers:
+        - name: ppo-agent
+          image: ketidevit2/ppo-agent:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: API_PORT
+              value: "8080"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: CUDA_MPS_PIPE_DIRECTORY
+              value: "/tmp/nvidia-mps"
+            - name: GPU_UUID
+              value: "GPU-895722c8-b706-27ae-018d-c43e405e6c35"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+            - name: mps-pipe
+              mountPath: /tmp/nvidia-mps
+            - name: nvidia-bin
+              mountPath: /usr/bin/nvidia-smi
+              readOnly: true
+            - name: nvidia-mps-control
+              mountPath: /usr/bin/nvidia-cuda-mps-control
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: models
+          hostPath:
+            path: /var/lib/keti/ppo-models
+            type: DirectoryOrCreate
+        - name: mps-pipe
+          hostPath:
+            path: /tmp/nvidia-mps
+            type: DirectoryOrCreate
+        - name: nvidia-bin
+          hostPath:
+            path: /usr/bin/nvidia-smi
+            type: File
+        - name: nvidia-mps-control
+          hostPath:
+            path: /usr/bin/nvidia-cuda-mps-control
+            type: File
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ppo-agent
+  namespace: edge-system
+  labels:
+    app: ppo-agent
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: ppo-agent
