@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# 런타임 산출물 (노드 상태 로그·모델 이력 DB — 저장소에 올리지 않음)
+resource-pool-manager/data/
+ppo-agent/models/
+*.sqlite
+
+# 내부 작업 기록 (저장소 외 보관)
+BACKLOG.md
+SUMMARY_stage1-3.md
+
+# 로컬 실행 환경설정 실값 (서버별 경로 — 저장소 외 보관, 템플릿은 env.local.sh)
+env.sh

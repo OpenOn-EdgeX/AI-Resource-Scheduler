@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: workload-05
+  namespace: scheduler-0324
+  labels:
+    group: low-load
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: curlimages/curl:latest
+          env:
+            - name: SCHEDULER
+              value: "http://ppo-agent.edge-system.svc.cluster.local:8080"
+            - name: POD_NAME
+              value: "workload-05"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              echo "[workload-05] /allocate 요청"
+              curl -s -X POST $SCHEDULER/allocate \
+                -H "Content-Type: application/json" \
+                -d '{"pod_name":"workload-05","namespace":"scheduler-0324","requested_cores":50,"requested_memory":1024}'
+              echo ""
+              echo "[workload-05] 작업 시뮬레이션 (3s)"
+              sleep 3
+              echo "[workload-05] /feedback 전송"
+              curl -s -X POST $SCHEDULER/feedback \
+                -H "Content-Type: application/json" \
+                -d '{"pod_name":"workload-05","allocated_cores":50,"allocated_memory":1024,"actual_performance":0.88,"completed":true}'
+              echo ""

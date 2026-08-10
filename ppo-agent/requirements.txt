@@ -1,0 +1,10 @@
+# KETI PPO Agent Dependencies
+
+# REST API
+flask>=3.0.0
+
+# Numerical computation
+numpy>=1.24.0
+
+# Deep Learning (optional - will fallback to heuristic if not available)
+torch>=2.0.0

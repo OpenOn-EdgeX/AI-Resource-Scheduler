@@ -1,0 +1,79 @@
+# SliceAllocation CRD — 스케줄러(spec 작성) ↔ KETRIS Engine(status 갱신)
+# C-IS-08 확정 스키마 (KETRIS 측 제공안 기준, 2026-07-20)
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sliceallocations.keti.re.kr
+spec:
+  group: keti.re.kr
+  scope: Namespaced
+  names:
+    plural: sliceallocations
+    singular: sliceallocation
+    kind: SliceAllocation
+    shortNames: ["sa"]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: LSU
+          type: number
+          jsonPath: .spec.lsuAmount
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Space
+          type: number
+          jsonPath: .status.applied.spaceRatio
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:                       # ← 스케줄러가 작성
+              type: object
+              properties:
+                gpuId: { type: string }
+                migPartitionId: { type: string }
+                lsuAmount: { type: number }
+                slo:
+                  type: object
+                  properties:
+                    type: { type: string, enum: [LATENCY, THROUGHPUT] }
+                    target: { type: number }
+                    priority: { type: integer }
+                profile:
+                  type: object
+                  properties:
+                    computeBoundness: { type: number }
+                    memoryBoundness: { type: number }
+                    estPeakMemMb: { type: integer }
+                    workloadType: { type: string, enum: [TRAIN, INFER, PREPROC] }
+                residual:
+                  type: object
+                  properties:
+                    freeSmRatio: { type: number }
+                    freeTimeRatio: { type: number }
+                    freeMemMb: { type: integer }
+            status:                     # ← KETRIS Engine 이 갱신
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [PLACED, SCALED, RESERVED, FAILED, RELEASED]
+                applied:
+                  type: object
+                  properties:
+                    spaceRatio: { type: number }
+                    timeRatio: { type: number }
+                    memMb: { type: integer }
+                occupancy:
+                  type: object
+                  properties:
+                    usedSmRatio: { type: number }
+                    usedTimeRatio: { type: number }
+                    usedMemMb: { type: integer }
+                    activeWorkloads: { type: integer }
+                timestamp: { type: integer }
