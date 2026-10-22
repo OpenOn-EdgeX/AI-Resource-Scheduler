@@ -1,0 +1,85 @@
+{
+  "name": "ProfileResult",
+  "version": "0.1",
+  "direction": "연세대 → KETI",
+  "key": "model_id",
+  "description": "연세대 프로파일 결과 (안) — 자원 요구량 프로파일·성능 예측·스케줄러 피드백. 전달은 별도 구조로 유지 (annotation 미사용). 자원 풀 ModelExecutionHistory 를 확장하는 방향.",
+  "fields": {
+    "model_id": {
+      "type": "string",
+      "required": true
+    },
+    "workload_id": {
+      "type": "string",
+      "desc": "특정 실행에 대한 프로파일일 때"
+    },
+    "profile_version": {
+      "type": "string"
+    },
+    "profiled_at": {
+      "type": "datetime"
+    },
+    "requirements": {
+      "est_peak_mem_mb": {
+        "type": "int",
+        "desc": "메모리 요구량"
+      },
+      "compute_boundness": {
+        "type": "float",
+        "desc": "0~1"
+      },
+      "memory_boundness": {
+        "type": "float",
+        "desc": "0~1"
+      },
+      "kernels_per_iter": {
+        "type": "int"
+      }
+    },
+    "sensitivity": {
+      "gpu": {
+        "type": "float",
+        "desc": "GPU 민감도"
+      },
+      "npu": {
+        "type": "float",
+        "desc": "NPU 민감도"
+      }
+    },
+    "predictions": {
+      "type": "list",
+      "desc": "조건별 성능 예측",
+      "item": {
+        "device_type": {
+          "type": "enum",
+          "values": [
+            "GPU",
+            "NPU"
+          ]
+        },
+        "product": {
+          "type": "string"
+        },
+        "space_ratio": {
+          "type": "float"
+        },
+        "pe_count": {
+          "type": "int"
+        },
+        "throughput": {
+          "type": "float"
+        },
+        "throughput_unit": {
+          "type": "string"
+        },
+        "latency_ms": {
+          "type": "float"
+        }
+      }
+    },
+    "confidence": {
+      "type": "float",
+      "desc": "예측 신뢰도 0~1"
+    }
+  }
+}

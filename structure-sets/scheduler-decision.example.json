@@ -1,0 +1,93 @@
+{
+  "_note": "공개용 익명화 예시: 식별자·시각·배포 정보는 예시 값이며 현재 운영 데이터가 아닙니다.",
+  "decision_id": "example-decision-001",
+  "workload_id": "example-workload-002",
+  "kueue_workload": "example-kueue-workload-001",
+  "namespace": "example-namespace-002",
+  "owner_kind": "Job",
+  "owner_name": "example-owner-001",
+  "decided_at": "2026-01-01T00:00:04Z",
+  "decision": "APPROVED",
+  "reason": "RESOURCE_FIT",
+  "reason_text": "Illustrative resource-fit approval; identifiers and timestamps are example values.",
+  "plan_source": "KETI",
+  "plan_id": "",
+  "input": {
+    "requests": {
+      "cpu": 0.1,
+      "keti.re.kr/lsu": 1.0,
+      "memory": 67108864.0
+    },
+    "flavors": {
+      "cpu": "example-flavor-001",
+      "keti.re.kr/lsu": "example-flavor-001",
+      "memory": "example-flavor-001"
+    },
+    "nodes": [
+      {
+        "node_name": "example-node-001",
+        "resource": "cpu",
+        "allocatable": 48.0,
+        "requested": 4.509,
+        "free": 43.491
+      },
+      {
+        "node_name": "example-node-001",
+        "resource": "keti.re.kr/lsu",
+        "allocatable": 240.0,
+        "requested": 0.0,
+        "free": 240.0
+      },
+      {
+        "node_name": "example-node-001",
+        "resource": "memory",
+        "allocatable": 67092213760.0,
+        "requested": 8436842496.0,
+        "free": 58655371264.0
+      }
+    ],
+    "workload_kind": "TRAIN",
+    "slo_target_latency_ms": 0.0,
+    "profile_available": false
+  },
+  "plan": {
+    "node_name": "example-node-001",
+    "resource": "keti.re.kr/lsu",
+    "amount": 1.0,
+    "score": {
+      "free_space": 0.9958,
+      "fragmentation_after": 0.0,
+      "slo_margin": -1,
+      "skku_score": -1,
+      "total": 0.9983
+    },
+    "alternatives": []
+  },
+  "applied": {
+    "observed_at": "2026-01-01T00:00:04Z",
+    "node_name": "example-node-001",
+    "pods": [
+      "example-pod-002"
+    ],
+    "matches_plan": true,
+    "ketris_config_version": ""
+  },
+  "resource_pool": {
+    "state": "RELEASED",
+    "result_code": 0,
+    "free_lsu": 0.0,
+    "virtual_sm": 1,
+    "active_tenants": 3,
+    "overcommit_ratio": 1.3511,
+    "at": "2026-01-01T00:00:04Z",
+    "released": {
+      "state": "RELEASED",
+      "result_code": 0,
+      "free_lsu": 0.0,
+      "virtual_sm": 0,
+      "active_tenants": 2,
+      "overcommit_ratio": 1.3457,
+      "at": "2026-01-01T00:00:05Z"
+    }
+  }
+}

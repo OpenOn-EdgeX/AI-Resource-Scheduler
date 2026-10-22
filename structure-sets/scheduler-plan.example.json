@@ -1,0 +1,33 @@
+{
+  "_note": "공개용 익명화 예시: 식별자·시각·배포 정보는 예시 값이며 현재 운영 데이터가 아닙니다.",
+  "plan_id": "example-plan-001",
+  "workload_id": "example-workload-002",
+  "round": 1,
+  "created_at": "2026-01-01T00:00:03Z",
+  "candidates": [
+    {
+      "candidate_id": "example-candidate-001",
+      "node_name": "example-node-001",
+      "device_id": "example-device-001",
+      "partition_id": null,
+      "space_ratio": 0.25,
+      "time_ratio": 0.6,
+      "mem_mb": 10240,
+      "pe_count": null,
+      "partial_score": 0.72,
+      "reconfigure": false
+    },
+    {
+      "candidate_id": "example-candidate-002",
+      "node_name": "example-node-001",
+      "device_id": "example-device-001",
+      "partition_id": null,
+      "space_ratio": 0.5,
+      "time_ratio": 0.3,
+      "mem_mb": 20480,
+      "pe_count": null,
+      "partial_score": 0.65,
+      "reconfigure": true
+    }
+  ]
+}

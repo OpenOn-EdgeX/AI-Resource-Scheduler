@@ -1,0 +1,358 @@
+{
+  "name": "ExecEnvInfo",
+  "version": "0.1",
+  "direction": "KETI → 연세대 → 성균관대",
+  "key": "workload_id",
+  "description": "실행환경 정보 structure set — KETI 안 v0.1. 워크로드 1건 = 문서 1개. 필드 표기: type / required / desc / source(값 출처) / now(현재 채워지는지). 전송 구현은 proto/exec_env_info.proto (같은 필드 이름).",
+  "fields": {
+    "schema_version": {
+      "type": "string",
+      "required": true,
+      "desc": "구조 버전",
+      "example": "0.1"
+    },
+    "workload_id": {
+      "type": "string",
+      "required": true,
+      "desc": "KETI 워크로드 번호",
+      "source": "keti-exec-router",
+      "now": true
+    },
+    "collected_at": {
+      "type": "datetime",
+      "required": true,
+      "desc": "수집 시각 (UTC)",
+      "now": true
+    },
+    "model": {
+      "model_id": {
+        "type": "string",
+        "desc": "등록 모델 ID",
+        "source": "위즈온텍 모델 등록",
+        "now": false
+      },
+      "model_name": {
+        "type": "string",
+        "source": "위즈온텍 모델 등록",
+        "now": false
+      },
+      "model_version": {
+        "type": "string",
+        "source": "위즈온텍 모델 등록",
+        "now": false
+      },
+      "model_uri": {
+        "type": "string",
+        "desc": "모델 파일·저장 위치",
+        "source": "1세부 실행 패키지",
+        "now": false
+      },
+      "model_graph_uri": {
+        "type": "string",
+        "desc": "모델 그래프 (ONNX 등)",
+        "source": "1세부 실행 패키지",
+        "now": false
+      },
+      "framework": {
+        "type": "string",
+        "desc": "pytorch / onnx / furiosa-llm ...",
+        "now": false
+      },
+      "image": {
+        "type": "string",
+        "desc": "컨테이너 이미지",
+        "source": "Pod 스펙",
+        "now": true
+      },
+      "image_digest": {
+        "type": "string",
+        "desc": "sha256:...",
+        "source": "Pod 상태",
+        "now": true
+      },
+      "pipeline_id": {
+        "type": "string",
+        "source": "KFP",
+        "now": false
+      },
+      "run_id": {
+        "type": "string",
+        "desc": "KFP run ID",
+        "source": "Pod 라벨 pipeline/runid",
+        "now": true
+      },
+      "step_name": {
+        "type": "string",
+        "desc": "파이프라인 단계 이름",
+        "source": "Argo 노드 이름",
+        "now": true
+      },
+      "workload_kind": {
+        "type": "enum",
+        "values": [
+          "TRAIN",
+          "INFER",
+          "PREPROC"
+        ],
+        "source": "라우터 라벨 workload-kind",
+        "now": true
+      },
+      "exec_type": {
+        "type": "enum",
+        "values": [
+          "JOB",
+          "SERVICE"
+        ],
+        "desc": "끝나는 작업 / 계속 떠 있는 작업",
+        "source": "라우터 kind 파싱",
+        "now": true
+      },
+      "k8s_kind": {
+        "type": "string",
+        "desc": "최상위 오브젝트 kind",
+        "now": true
+      },
+      "namespace": {
+        "type": "string",
+        "now": true
+      },
+      "replicas": {
+        "type": "int",
+        "desc": "복제본·worker 수",
+        "now": true
+      },
+      "requested_resources": {
+        "type": "map[string]string",
+        "desc": "요청 자원 (cpu, memory, keti.re.kr/lsu, keti.re.kr/npu-pe ...)",
+        "now": true
+      },
+      "queue_name": {
+        "type": "string",
+        "desc": "LocalQueue (gpu-lq / npu-lq / edge-lq)",
+        "now": true
+      },
+      "accel_class": {
+        "type": "enum",
+        "values": [
+          "gpu",
+          "npu",
+          "cpu"
+        ],
+        "now": true
+      },
+      "slo": {
+        "target_latency_ms": {
+          "type": "float",
+          "desc": "추론 응답시간 목표",
+          "source": "annotation keti.re.kr/slo-latency-ms (1세부 운영 요구사항)",
+          "now": "partial"
+        },
+        "target_throughput": {
+          "type": "float",
+          "source": "annotation keti.re.kr/slo-throughput",
+          "now": "partial"
+        },
+        "throughput_unit": {
+          "type": "string",
+          "values": [
+            "samples/s",
+            "req/s",
+            "tokens/s"
+          ]
+        },
+        "priority": {
+          "type": "int",
+          "desc": "큰 값이 높음"
+        }
+      }
+    },
+    "status": {
+      "phase": {
+        "type": "enum",
+        "values": [
+          "QUEUED",
+          "ADMITTED",
+          "RUNNING",
+          "SUCCEEDED",
+          "FAILED"
+        ],
+        "source": "Kueue Workload",
+        "now": true
+      },
+      "cluster_queue": {
+        "type": "string",
+        "now": true
+      },
+      "submitted_at": {
+        "type": "datetime",
+        "now": true
+      },
+      "admitted_at": {
+        "type": "datetime",
+        "now": true
+      },
+      "started_at": {
+        "type": "datetime",
+        "now": true
+      },
+      "finished_at": {
+        "type": "datetime",
+        "now": true
+      },
+      "restart_count": {
+        "type": "int",
+        "desc": "같은 번호 아래 재시도·교체 누계",
+        "now": true
+      },
+      "pod_names": {
+        "type": "list[string]",
+        "desc": "현재 실행 단위 (교체되면 바뀜)",
+        "now": true
+      },
+      "node_name": {
+        "type": "string",
+        "now": true
+      }
+    },
+    "sampling": {
+      "sampling_interval_ms": {
+        "type": "int",
+        "now": false
+      },
+      "window_start": {
+        "type": "datetime",
+        "now": false
+      },
+      "window_end": {
+        "type": "datetime",
+        "now": false
+      },
+      "series": {
+        "type": "list",
+        "item": {
+          "name": {
+            "type": "string",
+            "desc": "gpu_util, sm_active, mem_used_mb, npu_pe_util, throughput, latency_ms ..."
+          },
+          "unit": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string",
+            "desc": "장치 지표일 때만"
+          },
+          "points": {
+            "type": "list[{ts_unix_ms: int, value: float}]"
+          }
+        },
+        "now": "no (DCGM·NPU 지표 연결 후)"
+      },
+      "summary": {
+        "avg_throughput": {
+          "type": "float"
+        },
+        "throughput_unit": {
+          "type": "string"
+        },
+        "latency_p50_ms": {
+          "type": "float"
+        },
+        "latency_p95_ms": {
+          "type": "float"
+        },
+        "avg_gpu_util": {
+          "type": "float",
+          "desc": "자원 풀 ModelExecutionHistory.avg_gpu_util 과 같은 정의"
+        },
+        "processed_items": {
+          "type": "int"
+        }
+      },
+      "log_uri": {
+        "type": "string",
+        "desc": "원본 로그 위치 (본문은 싣지 않음)",
+        "now": false
+      },
+      "log_excerpt": {
+        "type": "list[string]",
+        "desc": "오류 등 짧은 발췌",
+        "now": false
+      }
+    },
+    "accelerators": {
+      "type": "list",
+      "item": {
+        "node_name": {
+          "type": "string",
+          "now": true
+        },
+        "device_id": {
+          "type": "string",
+          "desc": "GPU UUID / NPU 장치 ID",
+          "now": false
+        },
+        "device_type": {
+          "type": "enum",
+          "values": [
+            "GPU",
+            "NPU",
+            "CSD"
+          ],
+          "now": true
+        },
+        "product": {
+          "type": "string",
+          "now": false
+        },
+        "partition_id": {
+          "type": "string",
+          "desc": "파티션 세트의 partition_id",
+          "now": false
+        },
+        "allocated_lsu": {
+          "type": "float",
+          "desc": "받은 GPU 논리 자원량",
+          "now": true
+        },
+        "space_ratio": {
+          "type": "float",
+          "desc": "SM 공간 비율 0~1",
+          "now": "no (KETRIS 연계 후)"
+        },
+        "time_ratio": {
+          "type": "float",
+          "desc": "시간 비율 0~1",
+          "now": "no (KETRIS 연계 후)"
+        },
+        "allocated_npu_pe": {
+          "type": "int",
+          "now": true
+        },
+        "util": {
+          "type": "float",
+          "now": false
+        },
+        "mem_used_mb": {
+          "type": "float",
+          "now": false
+        },
+        "mem_total_mb": {
+          "type": "float",
+          "now": false
+        },
+        "mem_allocated_mb": {
+          "type": "float",
+          "now": false
+        },
+        "power_w": {
+          "type": "float",
+          "now": false
+        },
+        "temperature_c": {
+          "type": "float",
+          "now": false
+        }
+      }
+    }
+  }
+}

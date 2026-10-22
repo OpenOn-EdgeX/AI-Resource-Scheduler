@@ -1,0 +1,50 @@
+{
+  "_note": "공개용 익명화 예시: 식별자·시각·배포 정보는 예시 값이며 현재 운영 데이터가 아닙니다.",
+  "schema_version": "0.1",
+  "workload_id": "example-workload-001",
+  "collected_at": "2026-01-01T00:00:06Z",
+  "model": {
+    "model_id": "",
+    "model_uri": "",
+    "model_graph_uri": "",
+    "image": "registry.example.invalid/demo/worker-001:1.0",
+    "image_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+    "run_id": "example-run-001",
+    "step_name": "example-step-001",
+    "workload_kind": "TRAIN",
+    "exec_type": "JOB",
+    "k8s_kind": "Pod",
+    "namespace": "example-namespace-001",
+    "replicas": 1,
+    "requested_resources": {
+      "cpu": "1",
+      "memory": "2Gi"
+    },
+    "queue_name": "example-queue-001",
+    "accel_class": "cpu",
+    "slo": {
+      "target_latency_ms": 0.0,
+      "target_throughput": 0.0
+    }
+  },
+  "status": {
+    "phase": "SUCCEEDED",
+    "cluster_queue": "example-cluster-queue-001",
+    "submitted_at": "2026-01-01T00:00:01Z",
+    "admitted_at": "2026-01-01T00:00:01Z",
+    "started_at": "2026-01-01T00:00:01Z",
+    "finished_at": "2026-01-01T00:00:02Z",
+    "restart_count": 0,
+    "pod_names": [
+      "example-pod-001"
+    ],
+    "node_name": "example-node-001"
+  },
+  "sampling": {
+    "sampling_interval_ms": 0,
+    "series": [],
+    "log_uri": "",
+    "log_excerpt": []
+  },
+  "accelerators": []
+}

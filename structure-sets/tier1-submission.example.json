@@ -1,0 +1,43 @@
+{
+  "_note": "공개용 익명화 예시: 식별자·시각·배포 정보는 예시 값이며 현재 운영 데이터가 아닙니다.",
+  "submission_id": "example-submission-001",
+  "package": {
+    "image": "registry.example.invalid/demo/worker-002:1.0",
+    "image_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+    "model_uri": "https://artifacts.example.invalid/models/example-model-001.onnx",
+    "accelerator": "npu"
+  },
+  "execution": {
+    "kind": "infer",
+    "command": [
+      "python3",
+      "/app/example-server.py"
+    ],
+    "args": [
+      "--model",
+      "/models/example-model",
+      "--serve"
+    ],
+    "data_uri": null,
+    "port": 8080,
+    "stop_condition": null
+  },
+  "requirements": {
+    "resources": {
+      "cpu": "200m",
+      "memory": "256Mi",
+      "npu_pe": "1"
+    },
+    "priority": 100,
+    "slo": {
+      "latency_ms": 50,
+      "throughput": null,
+      "throughput_unit": "req/s"
+    },
+    "replicas": 2,
+    "health": {
+      "readiness_path": "/healthz",
+      "progress_path": null
+    }
+  }
+}

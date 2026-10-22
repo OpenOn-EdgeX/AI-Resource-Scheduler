@@ -1,0 +1,119 @@
+{
+  "name": "Tier1Submission",
+  "version": "0.1",
+  "direction": "1세부 → KETI (위즈온텍 모델 등록 경유)",
+  "key": "submission_id",
+  "description": "1세부에서 받는 정보 항목 — 이미지 외에 실행 내용·운영 요구사항. 이미지와 워크로드는 1:1 이 아니므로 워크로드(제출) 단위로 받는다. map_to = KETI 가 K8s 오브젝트에 반영하는 위치.",
+  "fields": {
+    "submission_id": {
+      "type": "string",
+      "required": true
+    },
+    "package": {
+      "desc": "실행 패키지",
+      "image": {
+        "type": "string",
+        "desc": "이미지 주소",
+        "required": true,
+        "map_to": "containers[].image"
+      },
+      "image_digest": {
+        "type": "string",
+        "desc": "sha256:...",
+        "map_to": "containers[].image (digest 고정)"
+      },
+      "model_uri": {
+        "type": "string",
+        "desc": "모델 파일·저장 위치",
+        "map_to": "volume / env"
+      },
+      "accelerator": {
+        "type": "enum",
+        "desc": "가속기 호환 조건",
+        "values": [
+          "gpu",
+          "npu",
+          "cpu"
+        ],
+        "map_to": "자원 요청 keti.re.kr/lsu · keti.re.kr/npu-pe → 라우터가 큐 결정"
+      }
+    },
+    "execution": {
+      "desc": "실행 내용",
+      "kind": {
+        "type": "enum",
+        "desc": "학습인지 추론인지",
+        "values": [
+          "train",
+          "infer",
+          "preprocess"
+        ],
+        "required": true,
+        "map_to": "라벨 keti.re.kr/workload-kind + kind(Job / Deployment)"
+      },
+      "command": {
+        "type": "list[string]",
+        "map_to": "command"
+      },
+      "args": {
+        "type": "list[string]",
+        "map_to": "args"
+      },
+      "data_uri": {
+        "type": "string",
+        "desc": "데이터 위치",
+        "map_to": "volume / PVC"
+      },
+      "port": {
+        "type": "int",
+        "desc": "추론 포트",
+        "map_to": "containerPort + Service"
+      },
+      "stop_condition": {
+        "type": "object",
+        "desc": "학습 종료 조건 (epochs, max_minutes ...)",
+        "map_to": "args / activeDeadlineSeconds"
+      }
+    },
+    "requirements": {
+      "desc": "운영 요구사항",
+      "resources": {
+        "type": "map[string]string",
+        "desc": "필요 자원 (cpu, memory, lsu, npu_pe)",
+        "map_to": "requests / limits"
+      },
+      "priority": {
+        "type": "int",
+        "map_to": "WorkloadPriorityClass"
+      },
+      "slo": {
+        "latency_ms": {
+          "type": "float",
+          "map_to": "annotation keti.re.kr/slo-latency-ms"
+        },
+        "throughput": {
+          "type": "float",
+          "map_to": "annotation keti.re.kr/slo-throughput"
+        },
+        "throughput_unit": {
+          "type": "string"
+        }
+      },
+      "replicas": {
+        "type": "int",
+        "desc": "복제본·worker 수",
+        "map_to": "replicas / TrainJob numNodes"
+      },
+      "health": {
+        "readiness_path": {
+          "type": "string",
+          "map_to": "readinessProbe"
+        },
+        "progress_path": {
+          "type": "string",
+          "desc": "진행 상태 확인 방법"
+        }
+      }
+    }
+  }
+}
