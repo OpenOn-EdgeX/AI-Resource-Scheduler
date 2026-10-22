@@ -1,0 +1,118 @@
+// 파티션 정보 세트 (KETI 기준 안 v0.1, 2026-10-14) — KETI 스케줄러 입력, 성균관대에 먼저 제시
+// 근거: 9월 월간회의 p.28 "성균관대 → KETI: 디바이스 매칭·동적 매핑·파티션 구성", p.42 승인·적용 비교(공간 구성·
+//       공간 메모리·시간비율). 성균관대 형식이 정해지기 전까지 KETI 가 쓰는 단위로 먼저 정의한다.
+// 단위는 새로 만들지 않고 기존 계약을 그대로 쓴다:
+//   - GPU 논리 자원량 LSU        : resource_pool.proto (free_lsu, lsu_amount), 확장 리소스 keti.re.kr/lsu
+//   - SM 공간 비율 / 시간 비율    : SliceAllocation CRD (spaceRatio, timeRatio, memMb)
+//   - MIG 파티션 ID              : SliceAllocation spec.migPartitionId — 구성은 성균관대 몫, KETI 는 ID 만 참조
+//   - NPU PE                     : 확장 리소스 keti.re.kr/npu-pe
+// 계획안(1회차·2회차 입력) 메시지는 스케줄러 Filter→Score 설계(P4)에서 이 세트를 참조해 정의한다.
+syntax = "proto3";
+
+package keti.partition.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service PartitionSetService {
+  // 노드(또는 전체)의 현재 파티션 정보 세트
+  rpc GetPartitionSet(GetPartitionSetRequest) returns (PartitionSet);
+}
+
+enum DeviceType {
+  DEVICE_TYPE_UNSPECIFIED = 0;
+  GPU = 1;
+  NPU = 2;
+}
+
+// 파티션을 만드는 방식
+enum PartitionMethod {
+  PARTITION_METHOD_UNSPECIFIED = 0;
+  WHOLE = 1;         // 분할 없이 장치 통째 (233 RTX 5090 현재)
+  SPACE_TIME = 2;    // SM 공간 비율 + 시간 비율 (MPS 공간 분할 + 시간 게이팅) — LSU 로 회계
+  MIG = 3;           // 하드웨어 분할 — 구성은 성균관대, KETI 는 ID·크기만 참조
+  NPU_PE = 4;        // NPU PE 단위 분할
+}
+
+enum PartitionState {
+  PARTITION_STATE_UNSPECIFIED = 0;
+  FREE = 1;          // 비어 있음
+  RESERVED = 2;      // 스케줄러가 승인해 잡아 둠 (resource_pool AllocationState.RESERVED)
+  BOUND = 3;         // 워크로드에 적용됨 (p.42 "할당 단계 BOUND")
+  UNAVAILABLE = 4;   // 장치 오류·점검 등
+}
+
+message PartitionSet {
+  string schema_version = 1;                   // "0.1"
+  google.protobuf.Timestamp collected_at = 2;
+  repeated NodeDevices nodes = 3;
+}
+
+message NodeDevices {
+  string node_name = 1;                        // example-node ...
+  string flavor = 2;                           // Kueue ResourceFlavor (gpu-flavor, npu-flavor, rtx5090-233)
+  repeated Device devices = 3;
+}
+
+message Device {
+  string device_id = 1;                        // GPU UUID / NPU 장치 ID
+  DeviceType device_type = 2;
+  string product = 3;
+  string architecture = 4;                     // Blackwell / RNGD ...
+  int64 mem_total_mb = 5;
+
+  // 분할 단위의 전체 크기
+  int32 sm_total = 6;                          // GPU 물리 SM 수 (resource_pool physical_sm_total)
+  double lsu_capacity = 7;                     // GPU 총 LSU (resource_pool device_lsu_capacity)
+  int32 pe_total = 8;                          // NPU 총 PE 수
+
+  PartitionCapability capability = 9;          // 이 장치가 받을 수 있는 분할
+  repeated Partition partitions = 10;          // 현재 나뉘어 있는 상태
+  DeviceUsage usage = 11;                      // 장치 전체 사용량
+}
+
+// 이 장치에서 가능한 분할 범위 — 성균관대가 파티션 구성안을 낼 때 지켜야 하는 경계
+message PartitionCapability {
+  repeated PartitionMethod methods = 1;
+  double space_ratio_step = 2;                 // 공간 비율 최소 단위 (예 0.05). 0 = 연속
+  double time_ratio_step = 3;
+  double min_space_ratio = 4;
+  int32 max_tenants = 5;                       // 한 장치에 동시에 올릴 수 있는 워크로드 수
+  repeated string mig_profiles = 6;            // 가능한 MIG 프로필 이름 (MIG 지원 시)
+  int32 pe_step = 7;                           // NPU PE 최소 단위
+  bool overcommit_allowed = 8;                 // resource_pool Mode.OVERCOMMIT 허용 여부
+}
+
+message Partition {
+  string partition_id = 1;                     // KETI 발급. resource_pool.proto partition_id 와 같은 값
+  PartitionMethod method = 2;
+  PartitionState state = 3;
+
+  // 크기 — method 에 맞는 필드만 채움
+  double space_ratio = 4;                      // SPACE_TIME: SM 공간 비율 (SliceAllocation spaceRatio)
+  double time_ratio = 5;                       // SPACE_TIME: 시간 비율 (SliceAllocation timeRatio)
+  double lsu_amount = 6;                       // SPACE_TIME: LSU 환산값
+  int64 mem_mb = 7;                            // 메모리 몫 (SliceAllocation memMb)
+  string mig_partition_id = 8;                 // MIG: SliceAllocation migPartitionId
+  string mig_profile = 9;
+  int32 pe_count = 10;                         // NPU_PE
+
+  repeated string workload_ids = 11;           // 올라가 있는 워크로드 (keti.re.kr/workload-id)
+  string config_version = 12;                  // KETRIS 가 적용한 분할 설정 버전 (p.42 "분할 설정 v2")
+}
+
+message DeviceUsage {
+  double free_lsu = 1;
+  double free_space_ratio = 2;                 // SliceAllocation spec.devState.freeSmRatio
+  double free_time_ratio = 3;                  // SliceAllocation spec.devState.freeTimeRatio
+  int64 free_mem_mb = 4;
+  int32 free_pe = 5;
+  int32 active_workloads = 6;
+  double overcommit_ratio = 7;
+  double util = 8;                             // 실측 활용률 (참고값)
+  double fragmentation = 9;                    // 단편화 지수 0~1 (KETI 자체 스코어 요소, 정의는 docs §4.3)
+}
+
+message GetPartitionSetRequest {
+  string node_name = 1;                        // 비우면 전체
+  bool include_free_only = 2;                  // true 면 FREE 파티션과 여유량만
+}

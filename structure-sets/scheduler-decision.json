@@ -1,0 +1,167 @@
+{
+  "name": "DecisionRecord",
+  "version": "0.1",
+  "direction": "KETI → 성균관대 (승인 결과), KETI 화면 (결정 이력)",
+  "key": "decision_id",
+  "description": "KETI 스케줄러가 판단할 때마다 남기는 결정 이력. 승인 계획안과 실제 적용 결과를 같은 레코드에 붙여 계획 대비 실제를 비교한다. 실제 값 조회: GET /api/v1/decisions.",
+  "fields": {
+    "decision_id": {
+      "type": "string",
+      "required": true
+    },
+    "workload_id": {
+      "type": "string",
+      "required": true
+    },
+    "kueue_workload": {
+      "type": "string",
+      "desc": "판단 당시 Kueue Workload 이름 (참고용)"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "decided_at": {
+      "type": "datetime",
+      "required": true
+    },
+    "decision": {
+      "type": "enum",
+      "values": [
+        "APPROVED",
+        "HELD",
+        "REJECTED"
+      ],
+      "required": true
+    },
+    "reason": {
+      "type": "enum",
+      "desc": "결정 사유",
+      "values": [
+        "RESOURCE_FIT",
+        "RESOURCE_WAIT",
+        "PROFILE_WAIT",
+        "NO_CANDIDATE",
+        "SLO_OK"
+      ],
+      "required": true
+    },
+    "reason_text": {
+      "type": "string"
+    },
+    "plan_source": {
+      "type": "enum",
+      "values": [
+        "KETI",
+        "SKKU_ROUND1",
+        "SKKU_ROUND2"
+      ]
+    },
+    "plan_id": {
+      "type": "string",
+      "desc": "참조한 성균관대 계획안 (없으면 빈 값)"
+    },
+    "input": {
+      "desc": "판단에 쓴 입력 스냅샷",
+      "requests": {
+        "type": "map[string]float"
+      },
+      "flavors": {
+        "type": "map[string]string"
+      },
+      "nodes": {
+        "type": "list[{node_name, resource, allocatable, requested, free}]"
+      },
+      "workload_kind": {
+        "type": "enum",
+        "values": [
+          "TRAIN",
+          "INFER",
+          "PREPROC",
+          "OTHER"
+        ]
+      },
+      "slo_target_latency_ms": {
+        "type": "float"
+      },
+      "profile_available": {
+        "type": "bool"
+      }
+    },
+    "plan": {
+      "desc": "KETI 승인 계획안",
+      "node_name": {
+        "type": "string"
+      },
+      "resource": {
+        "type": "string"
+      },
+      "amount": {
+        "type": "float"
+      },
+      "score": {
+        "free_space": {
+          "type": "float"
+        },
+        "fragmentation_after": {
+          "type": "float"
+        },
+        "slo_margin": {
+          "type": "float",
+          "desc": "데이터 없으면 -1"
+        },
+        "skku_score": {
+          "type": "float",
+          "desc": "성균관대 점수, 없으면 -1"
+        },
+        "total": {
+          "type": "float"
+        }
+      }
+    },
+    "applied": {
+      "desc": "실제 적용 (적용 후 같은 레코드에 붙음)",
+      "observed_at": {
+        "type": "datetime"
+      },
+      "node_name": {
+        "type": "string"
+      },
+      "pods": {
+        "type": "list[string]"
+      },
+      "matches_plan": {
+        "type": "bool"
+      },
+      "ketris_config_version": {
+        "type": "string",
+        "desc": "KETRIS 연계 후"
+      }
+    },
+    "resource_pool": {
+      "desc": "자원 풀 등록 결과 (UpdateAllocationDecision)",
+      "state": {
+        "type": "enum",
+        "values": [
+          "RESERVED",
+          "RELEASED",
+          "NOT_APPLICABLE",
+          "DISABLED",
+          "RESERVED_ERROR",
+          "RESERVED_FAILED"
+        ]
+      },
+      "free_lsu": {
+        "type": "float"
+      },
+      "virtual_sm": {
+        "type": "int"
+      },
+      "active_tenants": {
+        "type": "int"
+      },
+      "overcommit_ratio": {
+        "type": "float"
+      }
+    }
+  }
+}
