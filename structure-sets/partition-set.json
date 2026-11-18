@@ -1,0 +1,189 @@
+{
+  "name": "PartitionSet",
+  "version": "0.1",
+  "direction": "KETI → 성균관대 (스케줄러 입력)",
+  "key": "node_name / device_id / partition_id",
+  "description": "파티션 정보 세트 — 성균관대 형식 미정, KETI 기준으로 먼저 구성. 단위는 기존 계약 재사용: LSU(자원 풀), 공간·시간 비율·memMb(SliceAllocation), MIG 파티션 ID(구성은 성균관대, KETI 는 참조만), NPU PE. 전송 구현은 proto/partition_set.proto.",
+  "fields": {
+    "schema_version": {
+      "type": "string",
+      "required": true
+    },
+    "collected_at": {
+      "type": "datetime",
+      "required": true
+    },
+    "nodes": {
+      "type": "list",
+      "item": {
+        "node_name": {
+          "type": "string",
+          "desc": "노드 (example-node ...)"
+        },
+        "flavor": {
+          "type": "string",
+          "desc": "Kueue ResourceFlavor (gpu-flavor, npu-flavor, rtx5090-233)"
+        },
+        "devices": {
+          "type": "list",
+          "item": {
+            "device_id": {
+              "type": "string",
+              "desc": "GPU UUID / NPU 장치 ID"
+            },
+            "device_type": {
+              "type": "enum",
+              "values": [
+                "GPU",
+                "NPU"
+              ]
+            },
+            "product": {
+              "type": "string"
+            },
+            "architecture": {
+              "type": "string"
+            },
+            "mem_total_mb": {
+              "type": "int"
+            },
+            "sm_total": {
+              "type": "int",
+              "desc": "GPU 물리 SM 수"
+            },
+            "lsu_capacity": {
+              "type": "float",
+              "desc": "GPU 총 LSU"
+            },
+            "pe_total": {
+              "type": "int",
+              "desc": "NPU 총 PE"
+            },
+            "capability": {
+              "desc": "이 장치에서 가능한 분할 범위 — 성균관대 구성안이 지켜야 하는 경계",
+              "methods": {
+                "type": "list[enum]",
+                "values": [
+                  "WHOLE",
+                  "SPACE_TIME",
+                  "MIG",
+                  "NPU_PE"
+                ]
+              },
+              "space_ratio_step": {
+                "type": "float",
+                "desc": "공간 비율 최소 단위 (0 = 연속)"
+              },
+              "time_ratio_step": {
+                "type": "float"
+              },
+              "min_space_ratio": {
+                "type": "float"
+              },
+              "max_tenants": {
+                "type": "int",
+                "desc": "장치당 동시 워크로드 수"
+              },
+              "mig_profiles": {
+                "type": "list[string]"
+              },
+              "pe_step": {
+                "type": "int"
+              },
+              "overcommit_allowed": {
+                "type": "bool"
+              }
+            },
+            "partitions": {
+              "type": "list",
+              "desc": "현재 나뉘어 있는 상태",
+              "item": {
+                "partition_id": {
+                  "type": "string",
+                  "desc": "KETI 발급, 자원 풀 partition_id 와 같은 값"
+                },
+                "method": {
+                  "type": "enum",
+                  "values": [
+                    "WHOLE",
+                    "SPACE_TIME",
+                    "MIG",
+                    "NPU_PE"
+                  ]
+                },
+                "state": {
+                  "type": "enum",
+                  "values": [
+                    "FREE",
+                    "RESERVED",
+                    "BOUND",
+                    "UNAVAILABLE"
+                  ]
+                },
+                "space_ratio": {
+                  "type": "float"
+                },
+                "time_ratio": {
+                  "type": "float"
+                },
+                "lsu_amount": {
+                  "type": "float"
+                },
+                "mem_mb": {
+                  "type": "int"
+                },
+                "mig_partition_id": {
+                  "type": "string"
+                },
+                "mig_profile": {
+                  "type": "string"
+                },
+                "pe_count": {
+                  "type": "int"
+                },
+                "workload_ids": {
+                  "type": "list[string]"
+                },
+                "config_version": {
+                  "type": "string",
+                  "desc": "KETRIS 적용 분할 설정 버전"
+                }
+              }
+            },
+            "usage": {
+              "desc": "장치 전체 여유 — KETI 자체 스코어 입력",
+              "free_lsu": {
+                "type": "float"
+              },
+              "free_space_ratio": {
+                "type": "float"
+              },
+              "free_time_ratio": {
+                "type": "float"
+              },
+              "free_mem_mb": {
+                "type": "int"
+              },
+              "free_pe": {
+                "type": "int"
+              },
+              "active_workloads": {
+                "type": "int"
+              },
+              "overcommit_ratio": {
+                "type": "float"
+              },
+              "util": {
+                "type": "float"
+              },
+              "fragmentation": {
+                "type": "float",
+                "desc": "1 − (가장 큰 단일 장치 여유 / 전체 여유 합)"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

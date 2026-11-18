@@ -1,0 +1,64 @@
+{
+  "_note": "공개용 익명화 예시: 식별자·시각·배포 정보는 예시 값이며 현재 운영 데이터가 아닙니다.",
+  "schema_version": "0.1",
+  "collected_at": "2026-01-01T00:00:07Z",
+  "nodes": [
+    {
+      "node_name": "example-node-001",
+      "flavor": "example-flavor-001 / example-flavor-002",
+      "devices": [
+        {
+          "device_id": "example-device-001",
+          "device_type": "GPU",
+          "product": "example-accelerator-product-001",
+          "architecture": "example-architecture-001",
+          "mem_total_mb": 97887,
+          "sm_total": 188,
+          "lsu_capacity": 240.0,
+          "pe_total": null,
+          "capability": {
+            "methods": [
+              "SPACE_TIME"
+            ],
+            "space_ratio_step": null,
+            "time_ratio_step": null,
+            "min_space_ratio": null,
+            "max_tenants": null,
+            "mig_profiles": [],
+            "pe_step": null,
+            "overcommit_allowed": true
+          },
+          "partitions": [],
+          "usage": {
+            "free_lsu": 240.0,
+            "active_workloads": 0,
+            "free_space_ratio": null,
+            "free_time_ratio": null,
+            "util": null,
+            "fragmentation": 0.0
+          }
+        },
+        {
+          "device_id": "example-device-002",
+          "device_type": "NPU",
+          "product": "example-accelerator-product-002",
+          "architecture": "example-architecture-002",
+          "mem_total_mb": null,
+          "pe_total": 8,
+          "capability": {
+            "methods": [
+              "NPU_PE"
+            ],
+            "pe_step": 1,
+            "overcommit_allowed": false
+          },
+          "partitions": [],
+          "usage": {
+            "free_pe": 8,
+            "active_workloads": 0
+          }
+        }
+      ]
+    }
+  ]
+}

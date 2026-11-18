@@ -1,0 +1,69 @@
+{
+  "name": "PartitionPlan",
+  "version": "0.1",
+  "direction": "성균관대 → KETI (스케줄러 입력, 1회차·2회차 공통)",
+  "key": "plan_id",
+  "description": "성균관대 입력을 2회 받는 구조 (안). 1회차: 필터 전반 + 스코어 일부. 2회차: 디바이스 매칭 최종 결과로 스코어 완성. 성균관대 결과에만 의존하지 않고 KETI 자체 스코어와 합산하며, 입력이 없거나 시간이 넘으면 KETI 스코어만으로 판단한다. 승인 방식은 성균관대 회신 후 확정. 단위·ID 는 partition-set.json 을 따른다.",
+  "fields": {
+    "plan_id": {
+      "type": "string",
+      "desc": "결정 이력의 '참조 계획안'",
+      "required": true
+    },
+    "workload_id": {
+      "type": "string",
+      "required": true
+    },
+    "round": {
+      "type": "int",
+      "values": [
+        1,
+        2
+      ],
+      "required": true
+    },
+    "created_at": {
+      "type": "datetime"
+    },
+    "candidates": {
+      "type": "list",
+      "desc": "복수안 — 제출 여부 회신 대기, 1개여도 같은 형식",
+      "item": {
+        "candidate_id": {
+          "type": "string"
+        },
+        "node_name": {
+          "type": "string"
+        },
+        "device_id": {
+          "type": "string"
+        },
+        "partition_id": {
+          "type": "string",
+          "desc": "기존 파티션 재사용 시"
+        },
+        "space_ratio": {
+          "type": "float",
+          "desc": "새로 나눌 때 공간 비율"
+        },
+        "time_ratio": {
+          "type": "float"
+        },
+        "mem_mb": {
+          "type": "int"
+        },
+        "pe_count": {
+          "type": "int"
+        },
+        "partial_score": {
+          "type": "float",
+          "desc": "1회차: 스코어 일부 / 2회차: 매칭 최종 점수"
+        },
+        "reconfigure": {
+          "type": "bool",
+          "desc": "재구성 필요 여부 (트리거 정의는 회신 대기)"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "_note": "공개용 익명화 예시: 식별자·시각·배포 정보는 예시 값이며 현재 운영 데이터가 아닙니다.",
+  "model_id": "example-model-001",
+  "workload_id": null,
+  "profile_version": "example-profile-version-001",
+  "profiled_at": "2026-01-01T00:00:00Z",
+  "requirements": {
+    "est_peak_mem_mb": 6144,
+    "compute_boundness": 0.7,
+    "memory_boundness": 0.3,
+    "kernels_per_iter": 180
+  },
+  "sensitivity": {
+    "gpu": 0.8,
+    "npu": 0.4
+  },
+  "predictions": [
+    {
+      "device_type": "GPU",
+      "product": "example-accelerator-product-003",
+      "space_ratio": 0.25,
+      "pe_count": null,
+      "throughput": 420.0,
+      "throughput_unit": "req/s",
+      "latency_ms": 18.0
+    },
+    {
+      "device_type": "NPU",
+      "product": "example-accelerator-product-002",
+      "space_ratio": null,
+      "pe_count": 2,
+      "throughput": 300.0,
+      "throughput_unit": "req/s",
+      "latency_ms": 25.0
+    }
+  ],
+  "confidence": 0.75
+}

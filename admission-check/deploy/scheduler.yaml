@@ -1,0 +1,66 @@
+# keti-scheduler — Kueue AdmissionCheck 컨트롤러 (P4 골격). 결정 이력은 PVC(local-path)의 decisions.jsonl.
+# 이 파일만으로는 어떤 ClusterQueue 에도 붙지 않는다. 붙이는 것은 ClusterQueue.spec.admissionChecksStrategy (승인 필요).
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: AdmissionCheck
+metadata: {name: keti-scheduler}
+spec: {controllerName: keti.re.kr/scheduler}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: {name: keti-scheduler, namespace: keti-exec-system}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: keti-scheduler}
+rules:
+- {apiGroups: [""], resources: [pods, nodes], verbs: [get, list]}
+- {apiGroups: [batch], resources: [jobs], verbs: [get]}
+- {apiGroups: [trainer.kubeflow.org], resources: [trainjobs], verbs: [get]}
+- {apiGroups: [jobset.x-k8s.io], resources: [jobsets], verbs: [get]}
+- {apiGroups: [kueue.x-k8s.io], resources: [workloads, resourceflavors, admissionchecks], verbs: [get, list]}
+- {apiGroups: [kueue.x-k8s.io], resources: [workloads/status, admissionchecks/status], verbs: [get, patch]}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: {name: keti-scheduler}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: keti-scheduler}
+subjects: [{kind: ServiceAccount, name: keti-scheduler, namespace: keti-exec-system}]
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: keti-scheduler-data, namespace: keti-exec-system}
+spec:
+  storageClassName: local-path
+  accessModes: [ReadWriteOnce]
+  resources: {requests: {storage: 1Gi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: keti-scheduler, namespace: keti-exec-system, labels: {app: keti-scheduler}}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: keti-scheduler}}
+  template:
+    metadata: {labels: {app: keti-scheduler}}
+    spec:
+      serviceAccountName: keti-scheduler
+      securityContext: {fsGroup: 65534}
+      containers:
+      - name: scheduler
+        image: keti-exec/scheduler:0.4
+        imagePullPolicy: IfNotPresent
+        ports: [{containerPort: 8080}]
+        env:
+        - {name: RPM_ADDR, value: ""}   # 배포 환경의 자원 풀 주소를 별도로 설정. 빈 값은 연계 비활성.
+        readinessProbe: {httpGet: {path: /healthz, port: 8080}, periodSeconds: 10}
+        resources: {requests: {cpu: 20m, memory: 64Mi}, limits: {memory: 256Mi}}
+        volumeMounts: [{name: data, mountPath: /data}]
+      volumes: [{name: data, persistentVolumeClaim: {claimName: keti-scheduler-data}}]
+---
+apiVersion: v1
+kind: Service
+metadata: {name: keti-scheduler, namespace: keti-exec-system}
+spec:
+  selector: {app: keti-scheduler}
+  ports: [{port: 80, targetPort: 8080}]

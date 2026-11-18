@@ -1,0 +1,199 @@
+// 실행환경 정보 structure set (안 v0.1, 2026-10-14) — KETI 실행환경 → 연세대(자원 프로파일링)
+// 근거: 9월 월간회의 p.9 "실행 정보", p.28 "KETI → 연세대: 모델·파이프라인 정보·모델 그래프·실행 로그·샘플링·
+//       가속기·메모리 상태". 이후 성균관대에도 같은 구조로 전달한다.
+// 전달 방식: annotation 이 아니라 별도 gRPC (docs/data-definitions.md §3). KETI 가 제공하고 연세대가 조회·구독한다.
+// 키: workload_id = keti.re.kr/workload-id (keti-exec-router 발급, Pod 교체·재시도·복제에도 불변).
+//     Kueue Workload 이름은 Pod 단위로 바뀌므로 키로 쓰지 않는다.
+syntax = "proto3";
+
+package keti.execenv.v1;
+
+import "google/protobuf/timestamp.proto";
+
+service ExecEnvInfoService {
+  // 워크로드 하나의 현재 실행환경 정보
+  rpc GetExecEnvInfo(GetExecEnvInfoRequest) returns (ExecEnvInfo);
+  // 조건에 맞는 워크로드 목록 (프로파일 대상 선정용)
+  rpc ListExecEnvInfo(ListExecEnvInfoRequest) returns (ListExecEnvInfoResponse);
+  // 샘플링 주기마다 갱신분을 흘려보냄 (연세대가 실행 중 프로파일을 만들 때)
+  rpc WatchExecEnvInfo(WatchExecEnvInfoRequest) returns (stream ExecEnvInfo);
+}
+
+// ── 공통 enum ────────────────────────────────────────────────────────────
+// 라우터 라벨 keti.re.kr/workload-kind 와 SliceAllocation spec.profile.workloadType 과 같은 값 집합
+enum WorkloadKind {
+  WORKLOAD_KIND_UNSPECIFIED = 0;
+  TRAIN = 1;
+  INFER = 2;
+  PREPROC = 3;
+}
+
+// 라우터 라벨 keti.re.kr/exec-type
+enum ExecType {
+  EXEC_TYPE_UNSPECIFIED = 0;
+  JOB = 1;       // Job / TrainJob / JobSet / KFP 실행 Pod — 끝나는 작업
+  SERVICE = 2;   // Deployment / StatefulSet — 계속 떠 있는 작업
+}
+
+enum DeviceType {
+  DEVICE_TYPE_UNSPECIFIED = 0;
+  GPU = 1;
+  NPU = 2;
+  CSD = 3;
+}
+
+enum Phase {
+  PHASE_UNSPECIFIED = 0;
+  QUEUED = 1;       // Kueue 대기 (쿼터 미확보)
+  ADMITTED = 2;     // Kueue 승인, Pod 기동 전
+  RUNNING = 3;
+  SUCCEEDED = 4;
+  FAILED = 5;
+}
+
+// ── 최상위 ──────────────────────────────────────────────────────────────
+message ExecEnvInfo {
+  string schema_version = 1;                   // "0.1"
+  string workload_id = 2;                      // 키
+  google.protobuf.Timestamp collected_at = 3;
+  ModelPipelineInfo model = 4;                 // p.9 ① 모델·파이프라인 정보
+  ExecStatus status = 5;                       // 큐·실행 상태
+  ExecLogSampling sampling = 6;                // p.9 ② 실행 로그·샘플링
+  repeated AcceleratorState accelerators = 7;  // p.9 ③ 가속기·메모리 상태 (워크로드가 쓰는 장치만)
+}
+
+// ── ① 모델·파이프라인 정보 ──────────────────────────────────────────────
+message ModelPipelineInfo {
+  // 모델 (위즈온텍 모델 등록 → KETI 로 넘어온 값)
+  string model_id = 1;                 // resource_pool.proto ModelExecutionHistory.model_id 와 같은 키
+  string model_name = 2;
+  string model_version = 3;
+  string model_uri = 4;                // 모델 파일·저장 위치
+  string model_graph_uri = 5;          // p.28 "모델 그래프" (ONNX 등). 없으면 빈 값
+  string framework = 6;                // pytorch / onnx / furiosa-llm ...
+
+  // 실행 패키지
+  string image = 7;
+  string image_digest = 8;             // sha256:... — 이미지 태그 재사용 시에도 실행 단위를 구분
+
+  // 파이프라인 (KFP 로 제출된 경우만)
+  string pipeline_id = 9;
+  string pipeline_version_id = 10;
+  string run_id = 11;                  // KFP run id
+  string step_name = 12;               // 파이프라인 단계 이름 (preprocess / train / infer ...)
+
+  // 실행 형태
+  WorkloadKind workload_kind = 13;
+  ExecType exec_type = 14;
+  string k8s_kind = 15;                // 최상위 오브젝트 kind (Job, TrainJob, Deployment, Pod ...)
+  string namespace = 16;
+  int32 replicas = 17;                 // 복제본 / worker 수
+
+  // 요청 자원 (Pod 스펙의 requests·limits 합). 키 예: cpu, memory, keti.re.kr/lsu, keti.re.kr/npu-pe
+  map<string, string> requested_resources = 18;
+  string queue_name = 19;              // LocalQueue (gpu-lq / npu-lq / edge-lq ...)
+  string accel_class = 20;             // gpu / npu / cpu (라우터 라벨 keti.re.kr/accel-class)
+
+  // 운영 요구사항 (1세부 제공, docs §2)
+  SloSpec slo = 21;
+}
+
+message SloSpec {
+  double target_latency_ms = 1;        // 추론 응답시간 목표 (0 = 없음)
+  double target_throughput = 2;        // 처리량 목표 (단위는 throughput_unit)
+  string throughput_unit = 3;          // samples/s, req/s, tokens/s
+  int32 priority = 4;                  // 큰 값이 높음 (Kueue WorkloadPriorityClass 값과 맞춤)
+}
+
+// ── 큐·실행 상태 ─────────────────────────────────────────────────────────
+message ExecStatus {
+  Phase phase = 1;
+  string cluster_queue = 2;
+  google.protobuf.Timestamp submitted_at = 3;
+  google.protobuf.Timestamp admitted_at = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp finished_at = 6;
+  int32 restart_count = 7;             // 같은 workload_id 아래 Pod 재시도·교체 누계
+  repeated string pod_names = 8;       // 현재 실행 단위 (교체되면 바뀜)
+  string node_name = 9;
+}
+
+// ── ② 실행 로그·샘플링 ──────────────────────────────────────────────────
+message ExecLogSampling {
+  int32 sampling_interval_ms = 1;      // 수집 주기
+  google.protobuf.Timestamp window_start = 2;
+  google.protobuf.Timestamp window_end = 3;
+  repeated MetricSeries series = 4;    // 시계열 샘플
+  ThroughputSummary summary = 5;       // 창(window) 요약
+  string log_uri = 6;                  // 원본 로그 위치 (본문은 싣지 않는다 — 크기 문제)
+  repeated string log_excerpt = 7;     // 오류 등 짧은 발췌 (최대 수십 줄)
+}
+
+message MetricSeries {
+  string name = 1;                     // gpu_util, sm_active, mem_used_mb, npu_pe_util, throughput, latency_ms ...
+  string unit = 2;
+  string device_id = 3;                // 장치 지표면 장치, 워크로드 지표면 빈 값
+  repeated MetricPoint points = 4;
+}
+
+message MetricPoint {
+  int64 ts_unix_ms = 1;
+  double value = 2;
+}
+
+message ThroughputSummary {
+  double avg_throughput = 1;
+  string throughput_unit = 2;
+  double latency_p50_ms = 3;
+  double latency_p95_ms = 4;
+  double avg_gpu_util = 5;             // resource_pool.proto ModelExecutionHistory.avg_gpu_util 과 같은 정의
+  int64 processed_items = 6;           // 처리한 샘플·요청 수
+}
+
+// ── ③ 가속기·메모리 상태 ─────────────────────────────────────────────────
+message AcceleratorState {
+  string node_name = 1;
+  string device_id = 2;                // GPU UUID / NPU 장치 ID / CSD ID
+  DeviceType device_type = 3;
+  string product = 4;                  // RTX PRO 6000 Blackwell / RNGD ...
+  string partition_id = 5;             // partition_set.proto Partition.partition_id (분할 사용 시)
+
+  // 워크로드가 받은 몫
+  double allocated_lsu = 6;            // GPU 논리 자원량
+  double space_ratio = 7;              // SM 공간 비율 (0~1)
+  double time_ratio = 8;               // 시간 비율 (0~1)
+  int32 allocated_npu_pe = 9;          // NPU PE 개수
+
+  // 실측
+  double util = 10;                    // 장치 활용률 (0~1)
+  double mem_used_mb = 11;
+  double mem_total_mb = 12;
+  double mem_allocated_mb = 13;        // 워크로드 몫 메모리 (분할 시)
+  double power_w = 14;
+  double temperature_c = 15;
+}
+
+// ── 요청 ─────────────────────────────────────────────────────────────────
+message GetExecEnvInfoRequest {
+  string workload_id = 1;
+  bool include_samples = 2;            // false 면 sampling.series 를 비워 가볍게 반환
+}
+
+message ListExecEnvInfoRequest {
+  repeated WorkloadKind kinds = 1;     // 비우면 전체
+  repeated Phase phases = 2;
+  string model_id = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListExecEnvInfoResponse {
+  repeated ExecEnvInfo items = 1;      // include_samples=false 와 같은 가벼운 형태
+  string next_page_token = 2;
+}
+
+message WatchExecEnvInfoRequest {
+  repeated string workload_ids = 1;    // 비우면 kinds 조건으로
+  repeated WorkloadKind kinds = 2;
+  int32 sampling_interval_ms = 3;      // 0 = 서버 기본값
+}

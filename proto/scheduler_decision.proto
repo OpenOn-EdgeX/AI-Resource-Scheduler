@@ -1,0 +1,117 @@
+// 스케줄러 계획안·결정 이력 (KETI 안 v0.1, 2026-10-14)
+// 근거: 9월 월간회의 p.41 (결정 이력: 시각·대상·참조 계획안·결과·결정 사유), p.42 (계획안 / KETI 승인 / 실제 적용 비교).
+// 흐름: Kueue Workload 가 쿼터를 잡으면 AdmissionCheck(keti.re.kr/scheduler) 가 Filter → Score 로 승인·보류를 정한다.
+//   1회차 입력: 성균관대 계획안 (필터 전반 + 스코어 일부)  — PartitionPlan, round=1
+//   2회차 입력: 디바이스 매칭 최종 결과 (스코어 완성)      — PartitionPlan, round=2
+//   성균관대 입력이 없거나 시간이 넘으면 KETI 자체 스코어만으로 판단한다 (plan_source=KETI).
+// 단위·ID 는 partition_set.proto (partition_id, space_ratio, time_ratio, mem_mb, pe_count) 를 그대로 쓴다.
+syntax = "proto3";
+
+package keti.scheduler.v1;
+
+import "google/protobuf/timestamp.proto";
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  APPROVED = 1;   // AdmissionCheck Ready
+  HELD = 2;       // Pending(쿼터 유지) 또는 Retry(쿼터 반납 후 재대기)
+  REJECTED = 3;   // 실행 불가 — 현재 골격에서는 쓰지 않음
+}
+
+// p.41 "결정 사유"
+enum ReasonCode {
+  REASON_CODE_UNSPECIFIED = 0;
+  RESOURCE_FIT = 1;     // 승인: 물리 여유 충족, KETI 자체 스코어로 노드 선택 (SLO 데이터 연결 전의 승인)
+  RESOURCE_WAIT = 2;    // 보류: 가용 공간 부족
+  PROFILE_WAIT = 3;     // 보류: 프로파일·계획안(성균관대) 결과 대기
+  NO_CANDIDATE = 4;     // 보류: 조건에 맞는 장치 없음
+  SLO_OK = 5;           // 승인: SLO 조건까지 확인 (1세부 SLO·연세대 프로파일 연결 후 사용, 지금은 쓰지 않음)
+}
+
+enum PlanSource {
+  PLAN_SOURCE_UNSPECIFIED = 0;
+  KETI = 1;             // KETI 자체 스코어만 (폴백 포함)
+  SKKU_ROUND1 = 2;
+  SKKU_ROUND2 = 3;
+}
+
+// ── 성균관대 → KETI 계획안 (1·2회차 공통 형식) ──────────────────────────
+message PartitionPlan {
+  string plan_id = 1;                    // p.41 "참조 계획안" (예: 2안)
+  string workload_id = 2;
+  int32 round = 3;                       // 1 | 2
+  repeated PlanCandidate candidates = 4; // 복수안 — 제출 여부는 회신 대기, 1개여도 같은 형식
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message PlanCandidate {
+  string candidate_id = 1;
+  string node_name = 2;
+  string device_id = 3;
+  string partition_id = 4;               // 기존 파티션 재사용 시
+  double space_ratio = 5;                // 새로 나눌 때 (p.42 공간 구성)
+  double time_ratio = 6;                 // p.42 시간비율
+  int64 mem_mb = 7;                      // p.42 공간 메모리
+  int32 pe_count = 8;
+  double partial_score = 9;              // 1회차: 스코어 일부 / 2회차: 매칭 최종 점수
+  bool reconfigure = 10;                 // 재구성 필요 여부 (트리거 정의는 회신 대기)
+}
+
+// ── KETI 판단 결과 = 결정 이력 레코드 ───────────────────────────────────
+message DecisionRecord {
+  string decision_id = 1;
+  string workload_id = 2;                // keti.re.kr/workload-id
+  string kueue_workload = 3;             // 판단 당시 Kueue Workload 이름 (참고용, 키 아님)
+  string namespace = 4;
+  google.protobuf.Timestamp decided_at = 5;
+  Decision decision = 6;
+  ReasonCode reason = 7;
+  string reason_text = 8;
+  PlanSource plan_source = 9;
+  string plan_id = 10;                   // 참조한 성균관대 계획안 (없으면 빈 값)
+
+  InputSnapshot input = 11;              // 판단에 쓴 입력 그대로
+  ApprovedPlan plan = 12;                // 승인 계획안 (p.42 "KETI 승인" 열)
+  AppliedResult applied = 13;            // 실제 적용 (p.42 "실제 적용" 열) — 적용 후 같은 레코드에 붙임
+}
+
+message InputSnapshot {
+  map<string, string> requests = 1;      // 자원 요청 합 (Kueue resourceUsage)
+  map<string, string> flavors = 2;       // 자원 → Kueue ResourceFlavor
+  repeated NodeFree nodes = 3;           // 후보 노드의 여유량 (판단 시점)
+  string workload_kind = 4;              // TRAIN / INFER / PREPROC / OTHER
+  double slo_target_latency_ms = 5;      // annotation keti.re.kr/slo-latency-ms (없으면 0)
+  bool profile_available = 6;
+}
+
+message NodeFree {
+  string node_name = 1;
+  string resource = 2;                   // keti.re.kr/lsu, keti.re.kr/npu-pe, nvidia.com/gpu, cpu ...
+  double allocatable = 3;
+  double requested = 4;                  // 이미 올라간 Pod 요청 합
+  double free = 5;
+}
+
+message ApprovedPlan {
+  string node_name = 1;
+  string resource = 2;
+  double amount = 3;
+  ScoreBreakdown score = 4;
+}
+
+// KETI 자체 스코어 요소 — 성균관대 입력이 없어도 판단 가능하도록 유지
+message ScoreBreakdown {
+  double free_space = 1;                 // 배치 후 남는 여유 비율 (0~1)
+  double fragmentation_after = 2;        // 배치 후 단편화 지수 (partition_set.proto DeviceUsage.fragmentation)
+  double slo_margin = 3;                 // SLO 여유 (데이터 없으면 -1)
+  double skku_score = 4;                 // 성균관대 점수 (없으면 -1)
+  double total = 5;
+}
+
+message AppliedResult {
+  google.protobuf.Timestamp observed_at = 1;
+  string node_name = 2;                  // 실제 Pod 가 뜬 노드
+  repeated string pods = 3;
+  bool matches_plan = 4;                 // 계획 노드와 같은지
+  string ketris_config_version = 5;      // KETRIS 적용 분할 설정 버전 (P5 연계 후)
+}

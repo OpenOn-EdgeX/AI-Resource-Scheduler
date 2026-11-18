@@ -1,0 +1,25 @@
+# 검증 전용 큐 — cohort 없음(다른 큐와 빌려쓰기 없음), keti-scheduler 체크 부착. 검증 후 삭제.
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: ClusterQueue
+metadata: {name: sched-test-cq}
+spec:
+  namespaceSelector: {}
+  admissionChecksStrategy:
+    admissionChecks: [{name: keti-scheduler}]
+  resourceGroups:
+  - coveredResources: [cpu, memory, keti.re.kr/lsu]
+    flavors:
+    - name: gpu-flavor
+      resources:
+      - {name: cpu, nominalQuota: "200"}
+      - {name: memory, nominalQuota: 4Gi}
+      - {name: keti.re.kr/lsu, nominalQuota: "400"}
+  - coveredResources: [keti.re.kr/npu-pe]
+    flavors:
+    - name: npu-flavor
+      resources: [{name: keti.re.kr/npu-pe, nominalQuota: "12"}]
+---
+apiVersion: kueue.x-k8s.io/v1beta2
+kind: LocalQueue
+metadata: {name: sched-test-lq, namespace: edge-dev}
+spec: {clusterQueue: sched-test-cq}
